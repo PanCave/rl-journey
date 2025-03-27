@@ -1,0 +1,12 @@
+﻿# Python bytecode files
+__pycache__/
+
+# VSCode config (optional, je nach Bedarf)
+.vscode/
+
+# Weitere Standard-Dateien, die ignoriert werden sollten
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
