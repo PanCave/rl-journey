@@ -1,30 +1,66 @@
 import gymnasium as gym
 import numpy as np
 
+import sys
+import os
+# Add the parent directory to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from collections import deque
 import random
 
-env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, domain_randomize=True, continuous=True)
+from agents.carracing_agent import MichaelSchumacherDiscrete, DQN
+from utils.dataclasses import Replay
 
-episodes = 100
+BATCH_SIZE = 64
+REPLAY_BUFFER_RESET_STEPS = 1000
 
-state, info = env.reset()
-for episode in range(episodes):
-    replay_buffer = deque(maxlen=1000)
+# 0 nothing
+# 1 left
+# 2 right
+# 3 gas
+# 4 brake
+env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, domain_randomize=True, continuous=False)
+
+NUM_EPISODES = 100
+NUM_TIMESTEPS = 1000
+MAX_REPLAY_BUFFER_LENGTH = 10_000
+
+replay_buffer_reset_step_counter = 0
+
+input_shape = (96, 96, 3)
+output_shape = 5
+dqn = DQN(input_shape=input_shape, action_dim=output_shape)
+agent = MichaelSchumacherDiscrete(
+    env=env,
+    num_target_update_steps=100,
+    epsilon_init=1,    # Startwert für Epsilon
+    epsilon_min=0.001, # Minimaler Epsilon-Wert
+    delta=0.0001,      # Abnahmerate von Epsilon
+    gamma=0.9,          # Discount-Faktor
+    policy_network=dqn
+)
+replay_buffer = deque(maxlen=MAX_REPLAY_BUFFER_LENGTH)
+
+for episode in range(NUM_EPISODES):
+    state, info = env.reset()
     
-    for _ in range(500):
-        action = env.action_space.sample()
+    for _ in range(NUM_TIMESTEPS):
+        action = agent.select_action(state)
         
         next_state, reward, terminated, truncated, info = env.step(action)
         
-        experience = (state, action, reward, next_state)
+        experience = Replay(state, action, reward, next_state)
         replay_buffer.append(experience)
+        
+        experience_buffer = list(replay_buffer)
+        batch = random.sample(experience_buffer, BATCH_SIZE)
+        agent.train(batch)        
         
         if terminated or truncated:
             state, info = env.reset()
             break
-    
-    experience_buffer = list(replay_buffer)
-    random.sample(experience_buffer)
+        
+        state = next_state  
 
 env.close()

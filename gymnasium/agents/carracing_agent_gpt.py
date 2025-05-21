@@ -11,30 +11,36 @@ class CNNQNetwork(nn.Module):
     def __init__(self, input_shape, action_dim):
         super(CNNQNetwork, self).__init__()
         # CNN layers to process the image
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=8, stride=4)
-        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
-        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
-        self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.conv_layers = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=8, stride=4),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
         
         # Calculate the size of flattened features
         conv_output_size = self._get_conv_output(input_shape)
         
         # Fully connected layers (3 hidden layers with 128 neurons each)
-        self.fc1 = nn.Linear(conv_output_size, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 64)
-        self.fc4 = nn.Linear(64, action_dim)
-    
-    def _get_conv_output(self, shape):
+        self.fc_layers = nn.Sequential(
+            nn.Linear(conv_output_size, 128),
+            nn.Linear(128, 128),
+            nn.Linear(128, 64),
+            nn.Linear(64, action_dim)
+        )
+        
+    def _get_conv_output(self, shape) -> int:
         # Forward pass with dummy input to get output shape
         bs = 1
-        input_data = torch.zeros(bs, shape[2], shape[0], shape[1])
-        x = F.linear(self.conv1(input_data))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
-        return int(np.prod(x.size()))
+        dummy_data = torch.zeros(bs, shape[2], shape[0], shape[1])
+        x = self.conv_layers(dummy_data)
+        
+        return x.flatten(1).size(1)
     
     def forward(self, x):
         # Ensure input has the right format (batch_size, channels, height, width)
@@ -45,20 +51,15 @@ class CNNQNetwork(nn.Module):
         x = x.float() / 255.0
         
         # CNN layers
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
+        x = self.conv_layers(x)
         
         # Flatten
         x = x.view(x.size(0), -1)
         
         # Fully connected layers
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
+        x = self.fc_layers(x)
         
-        # Output layer (no activation as we want raw Q-values)
-        return self.fc4(x)
+        return x
 
 class MichaelSchumacher:
     def __init__(
