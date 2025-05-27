@@ -2,7 +2,6 @@ import random
 
 import gymnasium as gym
 import numpy as np
-from numpy.typing import NDArray
 from copy import deepcopy
 from typing import List
 import torch.nn.functional as F
@@ -98,7 +97,6 @@ class MichaelSchumacherDiscrete:
         value = random.random()
         if value <= self.epsilon:
             action = self.env.action_space.sample()
-            print(f"{action} (random), {self.epsilon}")
             return action
         else:
             with torch.no_grad():
@@ -107,7 +105,6 @@ class MichaelSchumacherDiscrete:
                 state_tensor = torch.unsqueeze(state_tensor, 0)
                 q_values = self.policy_network.forward(state_tensor)
                 action = int(torch.argmax(q_values))
-                print(action, self.epsilon)
                 return action
             
     def reset_epsilon(self):
