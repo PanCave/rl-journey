@@ -36,16 +36,19 @@ agent = MichaelSchumacherDiscrete(
     num_target_update_steps=100,
     epsilon_init=1,    # Startwert für Epsilon
     epsilon_min=0.001, # Minimaler Epsilon-Wert
-    delta=0.0001,      # Abnahmerate von Epsilon
+    epsilon_decay_rate=0.995,      # Abnahmerate von Epsilon
     gamma=0.9,          # Discount-Faktor
     policy_network=dqn
 )
 replay_buffer = deque(maxlen=MAX_REPLAY_BUFFER_LENGTH)
 
 for episode in range(NUM_EPISODES):
+    
     state, info = env.reset()
+    agent.reset_epsilon()
     
     for _ in range(NUM_TIMESTEPS):
+        # TODO: Construct from 3 images
         action = agent.select_action(state)
         
         next_state, reward, terminated, truncated, info = env.step(action)
@@ -54,8 +57,9 @@ for episode in range(NUM_EPISODES):
         replay_buffer.append(experience)
         
         experience_buffer = list(replay_buffer)
-        batch = random.sample(experience_buffer, BATCH_SIZE)
-        agent.train(batch)        
+        if len(experience_buffer) >= BATCH_SIZE:
+            batch = random.sample(experience_buffer, BATCH_SIZE)
+            agent.train(batch)        
         
         if terminated or truncated:
             state, info = env.reset()
