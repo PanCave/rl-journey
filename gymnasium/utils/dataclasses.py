@@ -8,3 +8,4 @@ class Replay:
     action: int
     reward: float
     next_state: NDArray
+    done: bool

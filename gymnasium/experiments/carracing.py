@@ -52,7 +52,7 @@ for episode in range(NUM_EPISODES):
         
         next_state, reward, terminated, truncated, info = env.step(action)
         
-        experience = Replay(state, action, reward, next_state)
+        experience = Replay(state, action, reward, next_state, terminated or truncated)
         replay_buffer.append(experience)
         
         experience_buffer = list(replay_buffer)
