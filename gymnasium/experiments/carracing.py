@@ -35,7 +35,7 @@ agent = MichaelSchumacherDiscrete(
     num_target_update_steps=100,
     epsilon_init=1,    # Startwert für Epsilon
     epsilon_min=0.001, # Minimaler Epsilon-Wert
-    epsilon_decay_rate=0.995,      # Abnahmerate von Epsilon
+    epsilon_decay_rate=0.9999,      # Abnahmerate von Epsilon
     gamma=0.9,          # Discount-Faktor
     policy_network=dqn
 )
