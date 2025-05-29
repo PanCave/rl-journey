@@ -92,6 +92,9 @@ class MichaelSchumacherDiscrete:
         
         self.target_network.eval()
         self.optimizer = torch.optim.Adam(self.policy_network.parameters())
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.policy_network.to(device=self.device)
+        self.target_network.to(device=self.device)
 
     def select_action(
         self,
@@ -104,7 +107,7 @@ class MichaelSchumacherDiscrete:
         else:
             with torch.no_grad():
                 self.policy_network.eval()
-                state_tensor = torch.Tensor(state)
+                state_tensor = torch.Tensor(state, device=self.device)
                 state_tensor = torch.unsqueeze(state_tensor, 0)
                 q_values = self.policy_network.forward(state_tensor)
                 action = int(torch.argmax(q_values))
@@ -124,29 +127,27 @@ class MichaelSchumacherDiscrete:
         self.policy_network.train()
         
         states = np.array([replay.state for replay in replay_batch])
-        states_tensor = torch.Tensor(states)
-        q_values = self.policy_network.forward(states_tensor)
-        max_q_values = torch.max(
-            input = q_values,
-            dim = -1).values
-        # one_hot_vectors = F.one_hot(
-        #     tensor = actions,
-        #     num_classes = 5)
-        
-        next_states = np.array([replay.next_state for replay in replay_batch])
-        next_states_tensor = torch.Tensor(next_states)
-        with torch.no_grad():
-            next_q_values = self.target_network.forward(next_states_tensor)
-        max_next_q_values = torch.max(
-            input = next_q_values,
-            dim = -1).values
-        
-        rewards = torch.Tensor([replay.reward for replay in replay_batch])
-        
-        # bellman equation
-        optimal_values = rewards + self.gamma * max_next_q_values
+        states_tensor = torch.Tensor(states, device=self.device)
+        q_values_batch = self.policy_network(states_tensor)
+        row_indices = torch.arange(q_values_batch.size(0), device=self.device)
+        actions = [replay.action for replay in replay_batch]
+        actions_tensor = torch.LongTensor(actions, device=self.device)
+        q_values = q_values_batch[row_indices, actions_tensor]
 
-        loss = F.mse_loss(max_q_values, optimal_values)      
+        with torch.no_grad():
+            done_mask = np.array([replay.done for replay in replay_batch])
+            done_mask_tensor = torch.BoolTensor(done_mask, device=self.device)
+            next_states = np.array([replay.next_state for replay in replay_batch])
+            next_states_tensor = torch.Tensor(next_states, device=self.device)
+            next_q_values = self.target_network(next_states_tensor)
+            max_next_q_values = torch.max(
+                input = next_q_values,
+                dim = -1).values
+            max_next_q_values[done_mask_tensor] = 0.0        
+            rewards = torch.Tensor([replay.reward for replay in replay_batch], device=self.device)
+            optimal_values = rewards + self.gamma * max_next_q_values
+
+        loss = F.mse_loss(q_values, optimal_values)      
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
