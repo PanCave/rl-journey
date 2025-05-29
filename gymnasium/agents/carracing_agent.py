@@ -121,7 +121,7 @@ class MichaelSchumacherDiscrete:
         # Update target network after n steps
         self.target_net_update_step_counter += 1
         if (self.target_net_update_step_counter == self.num_target_update_steps):
-            self.target_network = deepcopy(self.policy_network)
+            self.target_network.load_state_dict(self.policy_network.state_dict())
             self.target_net_update_step_counter = 0
             
         self.policy_network.train()
