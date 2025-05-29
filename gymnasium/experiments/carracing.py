@@ -40,6 +40,8 @@ agent = MichaelSchumacherDiscrete(
     policy_network=dqn
 )
 replay_buffer = deque(maxlen=MAX_REPLAY_BUFFER_LENGTH)
+step_counter = 0
+network_train_rate = 4
 
 for episode in range(NUM_EPISODES):
     
@@ -53,17 +55,17 @@ for episode in range(NUM_EPISODES):
         next_state, reward, terminated, truncated, info = env.step(action)
         
         experience = Replay(state, action, reward, next_state, terminated or truncated)
-        replay_buffer.append(experience)
-        
-        experience_buffer = list(replay_buffer)
-        if len(experience_buffer) >= BATCH_SIZE:
-            batch = random.sample(experience_buffer, BATCH_SIZE)
-            agent.train(batch)        
+        replay_buffer.append(experience)        
         
         if terminated or truncated:
             state, info = env.reset()
             break
+
+        if step_counter % network_train_rate == 0 and len(replay_buffer) >= BATCH_SIZE:
+            batch = random.sample(replay_buffer, BATCH_SIZE)
+            agent.train(batch, global_step=step_counter)
         
-        state = next_state  
+        step_counter += 1
+        state = next_state
 
 env.close()
