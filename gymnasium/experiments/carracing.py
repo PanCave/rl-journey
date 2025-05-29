@@ -41,6 +41,7 @@ agent = MichaelSchumacherDiscrete(
 )
 replay_buffer = deque(maxlen=MAX_REPLAY_BUFFER_LENGTH)
 step_counter = 0
+epsilon_update_rate = 10
 network_train_rate = 4
 
 for episode in range(NUM_EPISODES):
@@ -64,6 +65,9 @@ for episode in range(NUM_EPISODES):
         if step_counter % network_train_rate == 0 and len(replay_buffer) >= BATCH_SIZE:
             batch = random.sample(replay_buffer, BATCH_SIZE)
             agent.train(batch, global_step=step_counter)
+
+        if step_counter % epsilon_update_rate == 0:
+            agent.update_epsilon()
         
         step_counter += 1
         state = next_state

@@ -110,8 +110,8 @@ class MichaelSchumacherDiscrete:
                 action = int(torch.argmax(q_values))
                 return action
             
-    def reset_epsilon(self):
-        self.epsilon = self.epsilon_init
+    def update_epsilon(self):
+        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay_rate)
 
     def train(self,
               replay_batch: List[Replay]) -> None:
@@ -150,5 +150,3 @@ class MichaelSchumacherDiscrete:
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        
-        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay_rate)
