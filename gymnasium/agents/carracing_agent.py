@@ -7,6 +7,7 @@ from typing import List
 import torch.nn.functional as F
 import torch.nn as nn
 import torch
+from torch.utils.tensorboard import SummaryWriter
 
 from utils.dataclasses import Replay
 
@@ -77,7 +78,8 @@ class MichaelSchumacherDiscrete:
         epsilon_init: float,
         epsilon_min: float,
         epsilon_decay_rate: float,
-        gamma: float
+        gamma: float,
+        summary_writer: SummaryWriter
     ) -> None:
         self.env = env
         self.num_target_update_steps = num_target_update_steps
@@ -89,6 +91,7 @@ class MichaelSchumacherDiscrete:
         self.epsilon_decay_rate = epsilon_decay_rate
         self.gamma = gamma
         self.target_net_update_step_counter = 0
+        self.summary_writer = summary_writer
         
         self.target_network.eval()
         self.optimizer = torch.optim.Adam(self.policy_network.parameters())
@@ -117,7 +120,8 @@ class MichaelSchumacherDiscrete:
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay_rate)
 
     def train(self,
-              replay_batch: List[Replay]) -> None:
+              replay_batch: List[Replay],
+              global_step: int) -> None:
         # Update target network after n steps
         self.target_net_update_step_counter += 1
         if (self.target_net_update_step_counter == self.num_target_update_steps):
@@ -151,3 +155,5 @@ class MichaelSchumacherDiscrete:
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+
+        self.summary_writer.add_scalar("Loss / Batch", loss.item(), global_step=global_step)
