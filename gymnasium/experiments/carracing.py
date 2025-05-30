@@ -61,7 +61,7 @@ agent = MichaelSchumacherDiscrete(
     num_target_update_steps=100,
     epsilon_init=1,    # Startwert für Epsilon
     epsilon_min=0.001, # Minimaler Epsilon-Wert
-    epsilon_decay_rate=0.9999,      # Abnahmerate von Epsilon
+    epsilon_decay_rate=0.995,      # Abnahmerate von Epsilon
     gamma=0.9,          # Discount-Faktor
     policy_network=dqn,
     summary_writer=writer,
@@ -117,11 +117,12 @@ for episode_idx in range(start_episode_number, NUM_EPISODES):
             batch = random.sample(replay_buffer, BATCH_SIZE)
             agent.train(batch, global_step=step_counter)
 
-        if step_counter % epsilon_update_rate == 0:
-            agent.update_epsilon()
         
         step_counter += 1
         state = next_state
+
+    if episode_idx % epsilon_update_rate == 0:
+        agent.update_epsilon()
 
     mean_episode_reward = cummulative_episode_reward / episode_timesteps
     writer.add_scalar("Mean Reward / Episode", mean_episode_reward, episode_idx)
