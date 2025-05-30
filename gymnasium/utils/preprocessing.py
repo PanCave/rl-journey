@@ -34,5 +34,6 @@ class PreProcessor():
             "nhwc,c->nhw",
             states_tensor[..., :3], 
             self.grayscale_weights.to(states_tensor.device)).byte()
+        grayscales_hwn = grayscale_states.permute(1, 2, 0)
         
-        return grayscale_states
+        return grayscales_hwn
