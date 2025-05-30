@@ -102,7 +102,7 @@ class MichaelSchumacherDiscrete:
 
     def select_action(
         self,
-        state: np.ndarray
+        state: torch.Tensor
     ) -> int:
         value = random.random()
         if value <= self.epsilon:
@@ -111,9 +111,8 @@ class MichaelSchumacherDiscrete:
         else:
             with torch.no_grad():
                 self.policy_network.eval()
-                state_tensor = torch.tensor(state, device=self.device)
-                state_tensor = torch.unsqueeze(state_tensor, 0)
-                q_values = self.policy_network.forward(state_tensor)
+                state = torch.unsqueeze(state, 0)
+                q_values = self.policy_network.forward(state)
                 action = int(torch.argmax(q_values))
                 return action
             
