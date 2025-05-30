@@ -25,6 +25,7 @@ env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, d
 writer = SummaryWriter(log_dir="runs/carracing_experiment")
 
 NUM_EPISODES = 100
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_TIMESTEPS = 1000
 MAX_REPLAY_BUFFER_LENGTH = 10_000
 
@@ -41,7 +42,8 @@ agent = MichaelSchumacherDiscrete(
     epsilon_decay_rate=0.9999,      # Abnahmerate von Epsilon
     gamma=0.9,          # Discount-Faktor
     policy_network=dqn,
-    summary_writer=writer
+    summary_writer=writer,
+    device=device
 )
 replay_buffer = deque(maxlen=MAX_REPLAY_BUFFER_LENGTH)
 step_counter = 0

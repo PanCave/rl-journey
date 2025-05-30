@@ -79,7 +79,8 @@ class MichaelSchumacherDiscrete:
         epsilon_min: float,
         epsilon_decay_rate: float,
         gamma: float,
-        summary_writer: SummaryWriter
+        summary_writer: SummaryWriter,
+        device: torch.device
     ) -> None:
         self.env = env
         self.num_target_update_steps = num_target_update_steps
@@ -95,7 +96,7 @@ class MichaelSchumacherDiscrete:
         
         self.target_network.eval()
         self.optimizer = torch.optim.Adam(self.policy_network.parameters())
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
         self.policy_network.to(device=self.device)
         self.target_network.to(device=self.device)
 
