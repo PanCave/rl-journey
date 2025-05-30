@@ -111,7 +111,7 @@ class MichaelSchumacherDiscrete:
         else:
             with torch.no_grad():
                 self.policy_network.eval()
-                state_tensor = torch.Tensor(state, device=self.device)
+                state_tensor = torch.tensor(state, device=self.device)
                 state_tensor = torch.unsqueeze(state_tensor, 0)
                 q_values = self.policy_network.forward(state_tensor)
                 action = int(torch.argmax(q_values))
@@ -132,24 +132,24 @@ class MichaelSchumacherDiscrete:
         self.policy_network.train()
         
         states = np.array([replay.state for replay in replay_batch])
-        states_tensor = torch.Tensor(states, device=self.device)
+        states_tensor = torch.tensor(states, device=self.device)
         q_values_batch = self.policy_network(states_tensor)
         row_indices = torch.arange(q_values_batch.size(0), device=self.device)
         actions = [replay.action for replay in replay_batch]
-        actions_tensor = torch.LongTensor(actions, device=self.device)
+        actions_tensor = torch.tensor(actions, device=self.device, dtype=torch.long)
         q_values = q_values_batch[row_indices, actions_tensor]
 
         with torch.no_grad():
             done_mask = np.array([replay.done for replay in replay_batch])
-            done_mask_tensor = torch.BoolTensor(done_mask, device=self.device)
+            done_mask_tensor = torch.tensor(done_mask, device=self.device, dtype=torch.bool)
             next_states = np.array([replay.next_state for replay in replay_batch])
-            next_states_tensor = torch.Tensor(next_states, device=self.device)
+            next_states_tensor = torch.tensor(next_states, device=self.device)
             next_q_values = self.target_network(next_states_tensor)
             max_next_q_values = torch.max(
                 input = next_q_values,
                 dim = -1).values
             max_next_q_values[done_mask_tensor] = 0.0        
-            rewards = torch.Tensor([replay.reward for replay in replay_batch], device=self.device)
+            rewards = torch.tensor([replay.reward for replay in replay_batch], device=self.device)
             optimal_values = rewards + self.gamma * max_next_q_values
 
         loss = F.mse_loss(q_values, optimal_values)      
