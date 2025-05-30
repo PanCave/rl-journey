@@ -2,6 +2,8 @@ import gymnasium as gym
 
 import sys
 import os
+
+import torch
 # Add the parent directory to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -11,6 +13,9 @@ from torch.utils.tensorboard import SummaryWriter
 
 from agents.carracing_agent import MichaelSchumacherDiscrete, DQN
 from utils.dataclasses import Replay
+from utils.preprocessing import PreProcessor
+import numpy as np
+
 def save_checkpoint(
         agent: DQN,
         episode_idx: int,
@@ -39,8 +44,9 @@ env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, d
 
 writer = SummaryWriter(log_dir="runs/carracing_experiment")
 
-NUM_EPISODES = 100
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+preprocessor = PreProcessor(device)
+
 load_episode = 0
 checkpoint_path = f"checkpoints/policy_full_ep{load_episode}.pth"
 checkpoint = None
@@ -91,7 +97,10 @@ reward_history = []
 moving_reward_window = 10
 best_average_reward = float('-inf')
 
-for episode_idx in range(NUM_EPISODES):
+states_queue.append(empty_state)
+states_queue.append(empty_state)
+states_queue.append(empty_state)
+
 for episode_idx in range(start_episode_number, NUM_EPISODES):
     
     state, info = env.reset()
@@ -100,8 +109,9 @@ for episode_idx in range(start_episode_number, NUM_EPISODES):
     
     for _ in range(NUM_TIMESTEPS):
         episode_timesteps += 1
-        # TODO: Construct from 3 images
-        action = agent.select_action(state)
+        states_queue.append(state)
+        grayscaled_tensor = preprocessor.process(states_deque=states_queue)
+        action = agent.select_action(grayscaled_tensor)
         
         next_state, reward, terminated, truncated, info = env.step(action)
         cummulative_episode_reward += reward
