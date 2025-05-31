@@ -30,7 +30,7 @@ def save_checkpoint(
             'epsilon': agent.epsilon,
             'step_counter': step_counter
         }
-    torch.save(save_dict, f"checkpoints/{checkpoint_name}.pth")
+    torch.save(save_dict, f"gymnasium/checkpoints/{checkpoint_name}.pth")
 
 BATCH_SIZE = 64
 REPLAY_BUFFER_RESET_STEPS = 1000
@@ -42,15 +42,16 @@ REPLAY_BUFFER_RESET_STEPS = 1000
 # 4 brake
 env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, domain_randomize=True, continuous=False)
 
-writer = SummaryWriter(log_dir="runs/carracing_experiment")
+writer = SummaryWriter(log_dir="gymnasium/runs/carracing_experiment")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 preprocessor = PreProcessor(device)
 
-load_episode = 0
-checkpoint_path = f"checkpoints/policy_full_ep{load_episode}.pth"
+load_episode = 840
+checkpoint_path = f"gymnasium/checkpoints/stuck_detection/policy_full_ep{load_episode}.pth"
 checkpoint = None
 if os.path.exists(checkpoint_path):
+    print(f'Lade checkpoint {checkpoint_path}')
     checkpoint = torch.load(checkpoint_path, map_location=device)
 
 NUM_EPISODES = 1000
