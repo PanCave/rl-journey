@@ -118,6 +118,9 @@ class MichaelSchumacherDiscrete:
             
     def update_epsilon(self):
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay_rate)
+        if self.epsilon < 0.3 * self.epsilon_init:
+            self.epsilon_init *= 0.8
+            self.epsilon = self.epsilon_init
 
     def train(self,
               replay_batch: List[Replay],
