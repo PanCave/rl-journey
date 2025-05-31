@@ -102,13 +102,20 @@ states_queue.append(empty_state)
 states_queue.append(empty_state)
 states_queue.append(empty_state)
 
+
+
 for episode_idx in range(start_episode_number, NUM_EPISODES):
-    
     state, info = env.reset()
     cummulative_episode_reward = 0
     episode_timesteps = 0
+    print(episode_idx)
     
-    for _ in range(NUM_TIMESTEPS):
+    no_improvement_steps = 0
+    max_no_improvement_steps = int(50 + agent.epsilon * 150)
+    last_reward = cummulative_episode_reward
+    early_stop = False
+    
+    for timestep in range(NUM_TIMESTEPS):
         episode_timesteps += 1
         states_queue.append(state)
         grayscaled_tensor = preprocessor.process(states_deque=states_queue)
@@ -116,21 +123,35 @@ for episode_idx in range(start_episode_number, NUM_EPISODES):
         
         next_state, reward, terminated, truncated, info = env.step(action)
         cummulative_episode_reward += reward
+
+        step_counter += 1
+
+        if cummulative_episode_reward > last_reward:
+            no_improvement_steps = 0
+            last_reward = cummulative_episode_reward
+        else:
+            no_improvement_steps += 1
+
+        if no_improvement_steps >= max_no_improvement_steps:
+            early_stop = True
+            writer.add_scalar("Vorzeitig abgebrochen bei Schritt", timestep, episode_idx)
+            print(f'Episode {episode_idx} nach {timestep} Zeitschritte abgebrochen.')
+            terminated = True
         
         experience = Replay(state, action, reward, next_state, terminated or truncated)
         replay_buffer.append(experience)        
         
-        if terminated or truncated:
-            state, info = env.reset()
-            break
-
         if step_counter % network_train_rate == 0 and len(replay_buffer) >= BATCH_SIZE:
             batch = random.sample(replay_buffer, BATCH_SIZE)
             agent.train(batch, global_step=step_counter)
-
         
-        step_counter += 1
         state = next_state
+
+        if terminated or truncated:
+            break
+    
+    if not early_stop:
+        writer.add_scalar("Vorzeitig abgebrochen bei Schritt", NUM_TIMESTEPS, episode_idx)
 
     if episode_idx % epsilon_update_rate == 0:
         agent.update_epsilon()
