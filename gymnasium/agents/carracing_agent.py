@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 import torch
 from torch.utils.tensorboard import SummaryWriter
+from torch.optim import Optimizer
 
 from utils.dataclasses import Replay
 
@@ -16,13 +17,13 @@ class DQN(nn.Module):
         super(DQN, self).__init__()
         # CNN layers to process the image
         self.conv_layers = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=2, stride=1),
+            nn.Conv2d(input_shape[2], 32, kernel_size=8, stride=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(32, 64, kernel_size=3, stride=1),
+            nn.Conv2d(32, 64, kernel_size=4, stride=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(64, 64, kernel_size=4, stride=1),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2)
         )
@@ -157,7 +158,7 @@ class MichaelSchumacherDiscrete:
             rewards = torch.tensor([replay.reward for replay in replay_batch], device=self.device)
             optimal_values = rewards + self.gamma * max_next_q_values
 
-        loss = F.mse_loss(q_values, optimal_values)      
+        loss = F.mse_loss(q_values, optimal_values)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()

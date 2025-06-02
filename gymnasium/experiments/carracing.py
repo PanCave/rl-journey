@@ -33,7 +33,6 @@ def save_checkpoint(
     torch.save(save_dict, f"gymnasium/checkpoints/{checkpoint_name}.pth")
 
 BATCH_SIZE = 64
-REPLAY_BUFFER_RESET_STEPS = 1000
 
 # 0 nothing
 # 1 left
@@ -45,6 +44,7 @@ env = gym.make('CarRacing-v3', render_mode='rgb_array', lap_complete_percent=0.9
 writer = SummaryWriter(log_dir="gymnasium/runs/carracing_experiment")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(device)
 preprocessor = PreProcessor(device)
 
 load_episode = 840
@@ -54,21 +54,23 @@ if os.path.exists(checkpoint_path):
     print(f'Lade checkpoint {checkpoint_path}')
     checkpoint = torch.load(checkpoint_path, map_location=device)
 
-NUM_EPISODES = 1000
-NUM_TIMESTEPS = 1000
+NUM_EPISODES = 10_000
+NUM_TIMESTEPS = 1_000
 MAX_REPLAY_BUFFER_LENGTH = 10_000
 
 replay_buffer_reset_step_counter = 0
 
-input_shape = (96, 96, 3)
+state_width = 96
+state_height = 96
+number_of_frames = 3
+input_shape = (state_width, state_height, number_of_frames)
 output_shape = 5
 dqn = DQN(input_shape=input_shape, action_dim=output_shape)
 agent = MichaelSchumacherDiscrete(
     env=env,
-    num_target_update_steps=100,
     epsilon_init=1,    # Startwert für Epsilon
     epsilon_min=0.001, # Minimaler Epsilon-Wert
-    epsilon_decay_rate=0.995,      # Abnahmerate von Epsilon
+    epsilon_decay_rate=0.999,      # Abnahmerate von Epsilon
     gamma=0.9,          # Discount-Faktor
     policy_network=dqn,
     optimizer=torch.optim.Adam(dqn.parameters(), lr=0.0003),
@@ -88,8 +90,8 @@ if checkpoint is not None:
     agent.epsilon = checkpoint['epsilon']
     start_episode_number = checkpoint['episode_idx']
     start_step_counter = checkpoint['step_counter']
-empty_state = np.zeros((96, 96, 3), dtype=np.uint8)
-states_queue = deque(maxlen=3)
+empty_state = np.zeros(input_shape, dtype=np.uint8)
+states_queue = deque(maxlen=number_of_frames)
 replay_buffer = deque(maxlen=MAX_REPLAY_BUFFER_LENGTH)
 step_counter = start_step_counter
 epsilon_update_rate = 1
@@ -98,10 +100,10 @@ checkpoint_save_rate = 10
 reward_history = []
 moving_reward_window = 10
 best_average_reward = float('-inf')
+num_target_update_steps=100
 
-states_queue.append(empty_state)
-states_queue.append(empty_state)
-states_queue.append(empty_state)
+for _ in range(number_of_frames):
+    states_queue.append(empty_state)
 
 
 
