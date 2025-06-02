@@ -101,19 +101,24 @@ class MichaelSchumacherDiscrete:
 
     def select_action(
         self,
-        state: torch.Tensor
+        state: torch.Tensor,
+        inference_only: bool = False
     ) -> int:
-        value = random.random()
-        if value <= self.epsilon:
+        if inference_only or random.random() > self.epsilon:
+            return self._select_action_inference(state=state)
+        else:
             action = self.env.action_space.sample()
             return action
-        else:
-            with torch.no_grad():
-                self.policy_network.eval()
-                state = torch.unsqueeze(state, 0)
-                q_values = self.policy_network.forward(state)
-                action = int(torch.argmax(q_values))
-                return action
+        
+
+    def _select_action_inference(self, state: torch.Tensor):
+        with torch.no_grad():
+            self.policy_network.eval()
+            state = state.clone().detach().to(self.device).unsqueeze(0)
+            q_values = self.policy_network.forward(state)
+            action = int(torch.argmax(q_values))
+            return action
+
             
     def update_epsilon(self):
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay_rate)
