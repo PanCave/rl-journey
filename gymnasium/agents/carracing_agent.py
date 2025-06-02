@@ -73,17 +73,16 @@ class MichaelSchumacherDiscrete:
     def __init__(
         self,
         env: gym.Env,
-        num_target_update_steps: int,
         policy_network: nn.Module,
         epsilon_init: float,
         epsilon_min: float,
         epsilon_decay_rate: float,
         gamma: float,
+        optimizer: Optimizer,
         summary_writer: SummaryWriter,
         device: torch.device
     ) -> None:
         self.env = env
-        self.num_target_update_steps = num_target_update_steps
         self.policy_network = policy_network
         self.target_network = deepcopy(policy_network)
         self.epsilon_init = epsilon_init
@@ -91,11 +90,11 @@ class MichaelSchumacherDiscrete:
         self.epsilon = epsilon_init
         self.epsilon_decay_rate = epsilon_decay_rate
         self.gamma = gamma
+        self.optimizer = optimizer
         self.target_net_update_step_counter = 0
         self.summary_writer = summary_writer
         
         self.target_network.eval()
-        self.optimizer = torch.optim.Adam(self.policy_network.parameters())
         self.device = device
         self.policy_network.to(device=self.device)
         self.target_network.to(device=self.device)

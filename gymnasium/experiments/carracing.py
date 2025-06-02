@@ -71,6 +71,7 @@ agent = MichaelSchumacherDiscrete(
     epsilon_decay_rate=0.995,      # Abnahmerate von Epsilon
     gamma=0.9,          # Discount-Faktor
     policy_network=dqn,
+    optimizer=torch.optim.Adam(dqn.parameters(), lr=0.0003),
     summary_writer=writer,
     device=device
 )
