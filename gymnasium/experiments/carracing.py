@@ -40,7 +40,7 @@ REPLAY_BUFFER_RESET_STEPS = 1000
 # 2 right
 # 3 gas
 # 4 brake
-env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, domain_randomize=True, continuous=False)
+env = gym.make('CarRacing-v3', render_mode='rgb_array', lap_complete_percent=0.95, domain_randomize=True, continuous=False)
 
 writer = SummaryWriter(log_dir="gymnasium/runs/carracing_experiment")
 
