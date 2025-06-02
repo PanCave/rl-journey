@@ -144,6 +144,9 @@ for episode_idx in range(start_episode_number, NUM_EPISODES):
         if step_counter % network_train_rate == 0 and len(replay_buffer) >= BATCH_SIZE:
             batch = random.sample(replay_buffer, BATCH_SIZE)
             agent.train(batch, global_step=step_counter)
+
+        if step_counter % num_target_update_steps == 0:
+            agent.update_target_network()
         
         state = next_state
 
