@@ -96,6 +96,7 @@ if checkpoint is not None:
     start_step_counter = checkpoint['step_counter']
 empty_state = torch.zeros(state_width, state_height, number_of_frames, dtype=torch.uint8)
 states_queue = deque(maxlen=number_of_frames)
+next_states_queue = deque(maxlen=number_of_frames)
 replay_buffer = deque(maxlen=MAX_REPLAY_BUFFER_LENGTH)
 step_counter = start_step_counter
 epsilon_update_rate = 1
@@ -108,6 +109,7 @@ num_target_update_steps=500
 
 for _ in range(number_of_frames):
     states_queue.append(empty_state)
+    next_states_queue.append(empty_state)
 
 
 
@@ -124,11 +126,14 @@ for episode_idx in range(start_episode_number, NUM_EPISODES):
     
     for timestep in range(NUM_TIMESTEPS):
         episode_timesteps += 1
+        grayscaled_states_tensor = preprocessor.process(states_deque=states_queue)
         states_queue.append(state)
-        grayscaled_tensor = preprocessor.process(states_deque=states_queue)
-        action = agent.select_action(grayscaled_tensor)
+        action = agent.select_action(grayscaled_states_tensor)
         
         next_state, reward, terminated, truncated, info = env.step(action)
+        grayscaled_next_states_tensor = preprocessor.process(states_deque=next_states_queue)
+        next_states_queue.append(next_state)
+
         cummulative_episode_reward += reward
 
         step_counter += 1
@@ -145,7 +150,7 @@ for episode_idx in range(start_episode_number, NUM_EPISODES):
             print(f'Episode {episode_idx} nach {timestep} Zeitschritte abgebrochen.')
             terminated = True
         
-        experience = Replay(state, action, reward, next_state, terminated or truncated)
+        experience = Replay(grayscaled_states_tensor, action, reward, grayscaled_next_states_tensor, terminated or truncated)
         replay_buffer.append(experience)        
         
         if step_counter % network_train_rate == 0 and len(replay_buffer) >= BATCH_SIZE:
