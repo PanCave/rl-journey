@@ -8,8 +8,8 @@ import torch
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from collections import deque
-import random
 from torch.utils.tensorboard import SummaryWriter
+from torch.optim.lr_scheduler import ExponentialLR
 
 from agents.carracing_agent import MichaelSchumacherDiscrete, DQN
 from utils.dataclasses import Replay
@@ -68,6 +68,7 @@ number_of_frames = 3
 input_shape = (state_width, state_height, number_of_frames)
 output_shape = 5
 dqn = DQN(input_shape=input_shape, action_dim=output_shape)
+optimizer = torch.optim.Adam(dqn.parameters(), lr=0.0003)
 agent = MichaelSchumacherDiscrete(
     env=env,
     epsilon_init=1,    # Startwert für Epsilon
@@ -75,10 +76,11 @@ agent = MichaelSchumacherDiscrete(
     epsilon_decay_rate=0.999,      # Abnahmerate von Epsilon
     gamma=0.9,          # Discount-Faktor
     policy_network=dqn,
-    optimizer=torch.optim.Adam(dqn.parameters(), lr=0.0003),
+    optimizer=optimizer,
     summary_writer=writer,
     device=device
 )
+learning_rate_scheduler = ExponentialLR(optimizer=optimizer, gamma=0.95)
 
 start_step_counter = 0
 start_episode_number = 0
@@ -149,6 +151,7 @@ for episode_idx in range(start_episode_number, NUM_EPISODES):
         if step_counter % network_train_rate == 0 and len(replay_buffer) >= BATCH_SIZE:
             batch = batch_sampler.sample_with_high_rewards_prioritized(replay_buffer, BATCH_SIZE)
             agent.train(batch, global_step=step_counter)
+            learning_rate_scheduler.step()
 
         if step_counter % num_target_update_steps == 0:
             agent.update_target_network()
