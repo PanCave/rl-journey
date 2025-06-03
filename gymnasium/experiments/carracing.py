@@ -33,7 +33,7 @@ def save_checkpoint(
         }
     torch.save(save_dict, f"gymnasium/checkpoints/{checkpoint_name}.pth")
 
-BATCH_SIZE = 64
+BATCH_SIZE = 256
 
 # 0 nothing
 # 1 left
@@ -50,7 +50,7 @@ preprocessor = PreProcessor(device)
 batch_sampler = ReplayBufferSampler()
 
 load_episode = 840
-checkpoint_path = f"gymnasium/checkpoints/stuck_detection/policy_full_ep{load_episode}.pth"
+checkpoint_path = f"gymnasium/checkpoints/policy_full_ep{load_episode}.pth"
 checkpoint = None
 if os.path.exists(checkpoint_path):
     print(f'Lade checkpoint {checkpoint_path}')
@@ -58,7 +58,7 @@ if os.path.exists(checkpoint_path):
 
 NUM_EPISODES = 10_000
 NUM_TIMESTEPS = 1_000
-MAX_REPLAY_BUFFER_LENGTH = 10_000
+MAX_REPLAY_BUFFER_LENGTH = 50_000
 
 replay_buffer_reset_step_counter = 0
 
@@ -102,7 +102,7 @@ checkpoint_save_rate = 10
 reward_history = []
 moving_reward_window = 10
 best_average_reward = float('-inf')
-num_target_update_steps=100
+num_target_update_steps=500
 
 for _ in range(number_of_frames):
     states_queue.append(empty_state)
@@ -179,6 +179,13 @@ for episode_idx in range(start_episode_number, NUM_EPISODES):
 
     if episode_idx > 0 and episode_idx % checkpoint_save_rate == 0:
         save_checkpoint(agent=agent, episode_idx=episode_idx, step_counter=step_counter, checkpoint_name=f'policy_full_ep{episode_idx}')
+
+    if episode_idx % 100 == 0:
+        with torch.no_grad():
+            test_state = grayscaled_states_tensor.unsqueeze(0)
+            q_values = agent.policy_network(test_state)
+            print(f"Q-Values: {q_values.cpu().numpy()}")
+            print("Actions: 0=Nothing, 1=Left, 2=Right, 3=Gas, 4=Brake")
         
 
 env.close()
