@@ -14,6 +14,7 @@ from torch.utils.tensorboard import SummaryWriter
 from agents.carracing_agent import MichaelSchumacherDiscrete, DQN
 from utils.dataclasses import Replay
 from utils.preprocessing import PreProcessor
+from utils.batch_sampling import ReplayBufferSampler
 import numpy as np
 
 def save_checkpoint(
@@ -46,6 +47,7 @@ writer = SummaryWriter(log_dir="gymnasium/runs/carracing_experiment")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 preprocessor = PreProcessor(device)
+batch_sampler = ReplayBufferSampler()
 
 load_episode = 840
 checkpoint_path = f"gymnasium/checkpoints/stuck_detection/policy_full_ep{load_episode}.pth"
@@ -145,7 +147,7 @@ for episode_idx in range(start_episode_number, NUM_EPISODES):
         replay_buffer.append(experience)        
         
         if step_counter % network_train_rate == 0 and len(replay_buffer) >= BATCH_SIZE:
-            batch = random.sample(replay_buffer, BATCH_SIZE)
+            batch = batch_sampler.sample_with_high_rewards_prioritized(replay_buffer, BATCH_SIZE)
             agent.train(batch, global_step=step_counter)
 
         if step_counter % num_target_update_steps == 0:
