@@ -90,7 +90,7 @@ if checkpoint is not None:
     agent.epsilon = checkpoint['epsilon']
     start_episode_number = checkpoint['episode_idx']
     start_step_counter = checkpoint['step_counter']
-empty_state = np.zeros(input_shape, dtype=np.uint8)
+empty_state = torch.zeros(state_width, state_height, number_of_frames, dtype=torch.uint8)
 states_queue = deque(maxlen=number_of_frames)
 replay_buffer = deque(maxlen=MAX_REPLAY_BUFFER_LENGTH)
 step_counter = start_step_counter

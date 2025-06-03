@@ -137,8 +137,7 @@ class MichaelSchumacherDiscrete:
             
         self.policy_network.train()
         
-        states = np.array([replay.state for replay in replay_batch])
-        states_tensor = torch.tensor(states, device=self.device)
+        states_tensor = torch.stack([replay.state for replay in replay_batch]).to(device=self.device)
         q_values_batch = self.policy_network(states_tensor)
         row_indices = torch.arange(q_values_batch.size(0), device=self.device)
         actions = [replay.action for replay in replay_batch]
@@ -148,8 +147,7 @@ class MichaelSchumacherDiscrete:
         with torch.no_grad():
             done_mask = np.array([replay.done for replay in replay_batch])
             done_mask_tensor = torch.tensor(done_mask, device=self.device, dtype=torch.bool)
-            next_states = np.array([replay.next_state for replay in replay_batch])
-            next_states_tensor = torch.tensor(next_states, device=self.device)
+            next_states_tensor = torch.stack([replay.next_state for replay in replay_batch]).to(device=self.device)
             next_q_values = self.target_network(next_states_tensor)
             max_next_q_values = torch.max(
                 input = next_q_values,
