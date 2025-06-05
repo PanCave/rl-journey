@@ -1,4 +1,4 @@
-﻿# Python bytecode files
+# Python bytecode files
 __pycache__/
 
 # VSCode config (optional, je nach Bedarf)
@@ -13,3 +13,5 @@ __pycache__/
 rl-env
 gymnasium/checkpoints
 gymnasium/runs
+.DS_Store
+.venv

@@ -19,7 +19,12 @@ from utils.preprocessing import Preprocessor
 BATCH_SIZE = 64
 REPLAY_BUFFER_RESET_STEPS = 1000
 
-device = ('cuda' if torch.cuda.is_available() else 'cpu')
+if torch.cuda.is_available():
+    device = 'cuda'
+elif torch.mps.is_available():
+    device = 'mps'
+else:
+    device = 'cpu'
 
 # 0 nothing
 # 1 left
