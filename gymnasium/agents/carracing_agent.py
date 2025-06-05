@@ -16,13 +16,10 @@ class DQN(nn.Module):
         super(DQN, self).__init__()
         # CNN layers to process the image
         self.conv_layers = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=2, stride=1),
+            nn.Conv2d(input_shape[2], 16, kernel_size=8, stride=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(32, 64, kernel_size=3, stride=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(64, 64, kernel_size=4, stride=1),
+            nn.Conv2d(16, 32, kernel_size=4, stride=2),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2)
         )
@@ -34,8 +31,7 @@ class DQN(nn.Module):
         self.fc_layers = nn.Sequential(
             nn.Linear(conv_output_size, 512),
             nn.Linear(512, 128),
-            nn.Linear(128, 64),
-            nn.Linear(64, action_dim)
+            nn.Linear(128, action_dim)
         )
 
     def _get_conv_output(self, shape) -> int:
@@ -75,6 +71,7 @@ class MichaelSchumacherDiscrete:
         epsilon_init: float,
         epsilon_min: float,
         epsilon_decay_rate: float,
+        device: torch.device,
         gamma: float
     ) -> None:
         self.env = env
@@ -86,8 +83,9 @@ class MichaelSchumacherDiscrete:
         self.epsilon = epsilon_init
         self.epsilon_decay_rate = epsilon_decay_rate
         self.gamma = gamma
+        self.device = device
         self.target_net_update_step_counter = 0
-        
+
         self.target_network.eval()
         self.optimizer = torch.optim.Adam(self.policy_network.parameters())
 
@@ -98,7 +96,6 @@ class MichaelSchumacherDiscrete:
         value = random.random()
         if value <= self.epsilon:
             action = self.env.action_space.sample()
-            print(f"{action} (random), {self.epsilon}")
             return action
         else:
             with torch.no_grad():
@@ -107,9 +104,8 @@ class MichaelSchumacherDiscrete:
                 state_tensor = torch.unsqueeze(state_tensor, 0)
                 q_values = self.policy_network.forward(state_tensor)
                 action = int(torch.argmax(q_values))
-                print(action, self.epsilon)
                 return action
-            
+
     def reset_epsilon(self):
         self.epsilon = self.epsilon_init
 
@@ -118,37 +114,41 @@ class MichaelSchumacherDiscrete:
         # Update target network after n steps
         self.target_net_update_step_counter += 1
         if (self.target_net_update_step_counter == self.num_target_update_steps):
-            self.target_network = deepcopy(self.policy_network)
+            self.target_network.load_state_dict(self.policy_network.state_dict())
             self.target_net_update_step_counter = 0
-            
+
         self.policy_network.train()
-        
+
+        # Get q_values
         states = np.array([replay.state for replay in replay_batch])
-        states_tensor = torch.Tensor(states)
-        q_values = self.policy_network.forward(states_tensor)
-        max_q_values = torch.max(
-            input = q_values,
-            dim = -1).values
-        # one_hot_vectors = F.one_hot(
-        #     tensor = actions,
-        #     num_classes = 5)
-        
+        states_tensor = torch.tensor(states, device=self.device)
+        actions = np.array([replay.action for replay in replay_batch])
+        actions_tensor = torch.tensor(actions, dtype=torch.long, device=self.device)
+        q_values_batch = self.policy_network.forward(states_tensor)
+        indexes = torch.arange(q_values_batch.size(0), device=self.device)
+        q_values = q_values_batch[indexes, actions_tensor]
+
+        # Get q*_values
         next_states = np.array([replay.next_state for replay in replay_batch])
-        next_states_tensor = torch.Tensor(next_states)
+        next_states_tensor = torch.tensor(next_states, device=self.device)
+
         with torch.no_grad():
+            done_mask = np.array([replay.done for replay in replay_batch])
+            done_mask_tensor = torch.tensor(done_mask, device=self.device, dtype=torch.bool)
             next_q_values = self.target_network.forward(next_states_tensor)
+
         max_next_q_values = torch.max(
             input = next_q_values,
             dim = -1).values
-        
-        rewards = torch.Tensor([replay.reward for replay in replay_batch])
-        
+        max_next_q_values[done_mask_tensor] = 0.0
+        rewards = torch.Tensor([replay.reward for replay in replay_batch], device=self.device)
+
         # bellman equation
         optimal_values = rewards + self.gamma * max_next_q_values
 
-        loss = F.mse_loss(max_q_values, optimal_values)      
+        loss = F.huber_loss(q_values, optimal_values, delta=1)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        
+
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay_rate)

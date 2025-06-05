@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 
-from numpy.typing import NDArray
+import torch
 
 @dataclass
 class Replay:
-    state : NDArray
+    state : torch.Tensor
     action: int
     reward: float
-    next_state: NDArray
+    next_state: torch.Tensor
+    done: bool
