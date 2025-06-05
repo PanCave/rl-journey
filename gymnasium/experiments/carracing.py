@@ -32,15 +32,15 @@ else:
 # 4 brake
 env = gym.make('CarRacing-v3', render_mode='rgb_array', lap_complete_percent=0.95, domain_randomize=True, continuous=False)
 
-NUM_EPISODES = 100
-NUM_TIMESTEPS = 1000
+NUM_EPISODES = 10_000
+NUM_TIMESTEPS = 1_000
 MAX_REPLAY_BUFFER_LENGTH = 10_000
 EPISODE_SAVE_RATE = 10
-CHECKPOINTS_PATH = 'gymnasium/checkpoints/carracing_master/episode_{episode_idx}'
+CHECKPOINTS_PATH = 'gymnasium/checkpoints/carracing_master/episode_{episode_idx}.pth'
 
 replay_buffer_reset_step_counter = 0
 
-write = SummaryWriter("gymnasium/runs/carracing_master")
+writer = SummaryWriter("gymnasium/runs/carracing_master")
 
 state_width = 96
 state_height = 96
@@ -51,11 +51,11 @@ dqn = DQN(input_shape=input_shape, action_dim=output_shape)
 optimizer = torch.optim.Adam(dqn.parameters())
 agent = MichaelSchumacherDiscrete(
     env=env,
-    num_target_update_steps=500,
+    num_target_update_steps=2000,
     epsilon_init=1,    # Startwert für Epsilon
     epsilon_min=0.001, # Minimaler Epsilon-Wert
-    epsilon_decay_rate=0.995,      # Abnahmerate von Epsilon
-    gamma=0.9,          # Discount-Faktor
+    epsilon_decay_rate=0.999,      # Abnahmerate von Epsilon
+    gamma=0.95,          # Discount-Faktor
     optimizer=optimizer,
     device=device,
     policy_network=dqn
@@ -64,21 +64,26 @@ empty_state = torch.zeros(state_width, state_height)
 replay_buffer = deque(maxlen=MAX_REPLAY_BUFFER_LENGTH)
 states_queue = deque(maxlen=number_of_frames, iterable=[empty_state] * 3)
 next_states_queue = deque(maxlen=number_of_frames, iterable=[empty_state] * 3)
+global_step_counter = 0
 
 for episode_idx in range(NUM_EPISODES):
     
     state, info = env.reset()
-    agent.reset_epsilon()
 
     non_positive_reward_counter = 0
     sum_episode_reward = 0
     sum_episode_loss = 0
     episode_step_counter = 0
 
+    print(f'Episode {episode_idx}, Epsilon: {agent.epsilon}')
+    writer.add_scalar("Epsilon", agent.epsilon, episode_idx)
+
     for _ in range(50):
         env.step(0)
     
-    for _ in range(NUM_TIMESTEPS):
+    for timestep in range(NUM_TIMESTEPS):
+        global_step_counter += 1
+
         grayscaled_state = prep.convert_to_grayscale(state=state)
         states_queue.append(grayscaled_state)
         agent_state = prep.deque_to_tensor(states_queue)
@@ -99,16 +104,20 @@ for episode_idx in range(NUM_EPISODES):
             non_positive_reward_counter = 0
         
         if non_positive_reward_counter >= 50 + (agent.epsilon * 150):
+            print(f'Episode {episode_idx} abgebrochen nach {episode_step_counter} Schritten')
             terminated = True
         
         experience = Replay(agent_state, action, reward, next_agent_state, terminated or truncated)
         replay_buffer.append(experience)
         
         experience_buffer = list(replay_buffer)
-        if len(experience_buffer) >= BATCH_SIZE:
+        if len(experience_buffer) >= BATCH_SIZE and timestep % 4 == 0:
             batch = random.sample(experience_buffer, BATCH_SIZE)
             loss = agent.train(batch)
             sum_episode_loss += loss
+
+        if global_step_counter % 10 == 0:
+            agent.update_epsilon()
         
         if terminated or truncated:
             break
@@ -116,11 +125,9 @@ for episode_idx in range(NUM_EPISODES):
         state = next_state
 
     mean_episode_reward = sum_episode_reward / episode_step_counter
-    write.add_scalar("Mean Reward / Episode", mean_episode_reward, episode_idx)
-    write.add_scalar("Summed Loss / Episode", sum_episode_loss, episode_idx)
-    write.add_scalar("Episode Step Counter", episode_step_counter, episode_idx)
-
-    print(mean_episode_reward)
+    writer.add_scalar("Mean Reward / Episode", mean_episode_reward, episode_idx)
+    writer.add_scalar("Summed Loss / Episode", sum_episode_loss, episode_idx)
+    writer.add_scalar("Episode Step Counter", episode_step_counter, episode_idx)
 
     if episode_idx > 0 and episode_idx % EPISODE_SAVE_RATE == 0:
         chkpts.save_checkpoint(
@@ -128,6 +135,10 @@ for episode_idx in range(NUM_EPISODES):
             episode_idx=episode_idx, 
             save_checkpoint_path=CHECKPOINTS_PATH.format(episode_idx=episode_idx)
         )
+
+    if agent.epsilon <= agent.epsilon_init * 0.3:
+        agent.epsilon_init *= 0.8
+        agent.reset_epsilon()
     
 
 env.close()

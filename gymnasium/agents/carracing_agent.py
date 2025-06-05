@@ -113,6 +113,9 @@ class MichaelSchumacherDiscrete:
     def reset_epsilon(self):
         self.epsilon = self.epsilon_init
 
+    def update_epsilon(self):
+        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay_rate)
+
     def train(self,
               replay_batch: List[Replay]) -> int:
         # Update target network after n steps
@@ -154,7 +157,5 @@ class MichaelSchumacherDiscrete:
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-
-        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay_rate)
 
         return loss.detach().item()
