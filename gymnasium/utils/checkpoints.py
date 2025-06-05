@@ -17,8 +17,7 @@ def save_checkpoint(
         'epsilon': agent.epsilon,
         'episode_idx': episode_idx
     }
-
-    torch.save(save_dict, save_checkpoint_path)
+    torch.save(save_dict, save_checkpoint_path + ".pth")
 
 def load_checkpoint(load_checkpoint_path: str) -> dict[str: Any]:
     return torch.load(load_checkpoint_path, weights_only=False)

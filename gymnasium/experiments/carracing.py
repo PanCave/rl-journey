@@ -21,7 +21,7 @@ REPLAY_BUFFER_RESET_STEPS = 1000
 if torch.cuda.is_available():
     device = 'cuda'
 elif torch.mps.is_available():
-    device = 'mps'  # Schmutz
+    device = 'mps'  # GOAT
 else:
     device = 'cpu'
 

@@ -20,7 +20,7 @@ env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, d
 if torch.cuda.is_available():
     device = 'cuda'
 elif torch.mps.is_available():
-    device = 'mps'  # Schmutz
+    device = 'mps'  # GOAT
 else:
     device = 'cpu'
 
