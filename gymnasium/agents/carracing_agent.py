@@ -78,8 +78,8 @@ class MichaelSchumacherDiscrete:
     ) -> None:
         self.env = env
         self.num_target_update_steps = num_target_update_steps
-        self.policy_network = policy_network.to(device)
-        self.target_network = deepcopy(policy_network).to(device)
+        self.policy_network = policy_network
+        self.target_network = deepcopy(policy_network)
         self.epsilon_init = epsilon_init
         self.epsilon_min = epsilon_min
         self.epsilon = epsilon_init
@@ -90,6 +90,8 @@ class MichaelSchumacherDiscrete:
 
         self.target_network.eval()
         self.optimizer = optimizer
+        self.policy_network.to(device=self.device)
+        self.target_network.to(device=self.device)
 
     def select_action(
         self,
@@ -100,7 +102,7 @@ class MichaelSchumacherDiscrete:
         if inference_only or value > self.epsilon:
             with torch.no_grad():
                 self.policy_network.eval()
-                state = torch.unsqueeze(state, 0)
+                state = torch.unsqueeze(state, 0).to(device=self.device)
                 q_values = self.policy_network.forward(state)
                 action = int(torch.argmax(q_values))
                 return action
