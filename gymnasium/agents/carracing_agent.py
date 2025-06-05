@@ -45,7 +45,8 @@ class DQN(nn.Module):
     def forward(self, tensor_input: torch.Tensor):
         # Ensure input has the right format (batch_size, channels, height, width)
         # Original shape: (batch_size, height, width, channels)
-        tensor_input = tensor_input.permute(0, 3, 1, 2)
+        # No longer needed, as we now permute in preprocessing
+        #tensor_input = tensor_input.permute(0, 3, 1, 2)
 
         # Normalize pixel values to [0, 1]
         tensor_input = tensor_input.float() / 255.0
@@ -71,13 +72,14 @@ class MichaelSchumacherDiscrete:
         epsilon_init: float,
         epsilon_min: float,
         epsilon_decay_rate: float,
+        optimizer: torch.optim.Optimizer,
         device: torch.device,
         gamma: float
     ) -> None:
         self.env = env
         self.num_target_update_steps = num_target_update_steps
-        self.policy_network = policy_network
-        self.target_network = deepcopy(policy_network)
+        self.policy_network = policy_network.to(device)
+        self.target_network = deepcopy(policy_network).to(device)
         self.epsilon_init = epsilon_init
         self.epsilon_min = epsilon_min
         self.epsilon = epsilon_init
@@ -87,30 +89,30 @@ class MichaelSchumacherDiscrete:
         self.target_net_update_step_counter = 0
 
         self.target_network.eval()
-        self.optimizer = torch.optim.Adam(self.policy_network.parameters())
+        self.optimizer = optimizer
 
     def select_action(
         self,
-        state: np.ndarray
+        state: torch.Tensor,
+        inference_only: bool = False
     ) -> int:
         value = random.random()
-        if value <= self.epsilon:
-            action = self.env.action_space.sample()
-            return action
-        else:
+        if inference_only or value > self.epsilon:
             with torch.no_grad():
                 self.policy_network.eval()
-                state_tensor = torch.Tensor(state)
-                state_tensor = torch.unsqueeze(state_tensor, 0)
-                q_values = self.policy_network.forward(state_tensor)
+                state = torch.unsqueeze(state, 0)
+                q_values = self.policy_network.forward(state)
                 action = int(torch.argmax(q_values))
                 return action
+        else:
+            action = self.env.action_space.sample()
+            return action
 
     def reset_epsilon(self):
         self.epsilon = self.epsilon_init
 
     def train(self,
-              replay_batch: List[Replay]) -> None:
+              replay_batch: List[Replay]) -> int:
         # Update target network after n steps
         self.target_net_update_step_counter += 1
         if (self.target_net_update_step_counter == self.num_target_update_steps):
@@ -141,7 +143,7 @@ class MichaelSchumacherDiscrete:
             input = next_q_values,
             dim = -1).values
         max_next_q_values[done_mask_tensor] = 0.0
-        rewards = torch.Tensor([replay.reward for replay in replay_batch], device=self.device)
+        rewards = torch.tensor([replay.reward for replay in replay_batch], device=self.device)
 
         # bellman equation
         optimal_values = rewards + self.gamma * max_next_q_values
@@ -152,3 +154,5 @@ class MichaelSchumacherDiscrete:
         self.optimizer.step()
 
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay_rate)
+
+        return loss.detach().item()
