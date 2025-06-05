@@ -2,7 +2,6 @@ import random
 
 import gymnasium as gym
 import numpy as np
-from numpy.typing import NDArray
 from copy import deepcopy
 from typing import List
 import torch.nn.functional as F
