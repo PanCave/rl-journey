@@ -60,12 +60,12 @@ number_of_frames = 3
 input_shape = (state_width, state_height, number_of_frames)
 output_shape = 5
 dqn = DQN(input_shape=input_shape, action_dim=output_shape)
-optimizer = torch.optim.Adam(dqn.parameters())
+optimizer = torch.optim.Adam(dqn.parameters(), lr=0.0001)
 agent = MichaelSchumacherDiscrete(
     env=env,
     num_target_update_steps=2000,
-    epsilon_init=1,    # Startwert für Epsilon
-    epsilon_min=0.001, # Minimaler Epsilon-Wert
+    epsilon_init=0.49,    # Startwert für Epsilon
+    epsilon_min=0.01, # Minimaler Epsilon-Wert
     epsilon_decay_rate=0.995,      # Abnahmerate von Epsilon
     gamma=0.95,          # Discount-Faktor
     optimizer=optimizer,
