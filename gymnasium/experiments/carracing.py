@@ -31,7 +31,7 @@ else:
 # 2 right
 # 3 gas
 # 4 brake
-env = gym.make('CarRacing-v3', render_mode='rgb_array', lap_complete_percent=0.95, domain_randomize=True, continuous=False)
+env = gym.make('CarRacing-v3', render_mode='rgb_array', lap_complete_percent=0.95, domain_randomize=True, continuous=False, max_episode_steps=-1)
 
 NUM_EPISODES = 10_000
 NUM_TIMESTEPS = 10_000

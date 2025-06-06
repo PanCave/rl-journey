@@ -15,7 +15,7 @@ LOAD_EPISODE = 10
 CHECKPOINT_PATH = f'gymnasium/checkpoints/carracing_master/episode_{LOAD_EPISODE}.pth.pth'
 checkpoint = chkpts.load_checkpoint(CHECKPOINT_PATH)
 
-env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, domain_randomize=True, continuous=False)
+env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, domain_randomize=True, continuous=False, max_episode_steps=-1)
 
 if torch.cuda.is_available():
     device = 'cuda'
