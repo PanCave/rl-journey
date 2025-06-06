@@ -7,7 +7,6 @@ import gymnasium as gym
 from torch.utils.tensorboard import SummaryWriter
 
 from collections import deque
-import random
 import torch
 
 from agents.carracing_agent import MichaelSchumacherDiscrete, DQN
@@ -37,11 +36,23 @@ NUM_EPISODES = 10_000
 NUM_TIMESTEPS = 10_000
 MAX_REPLAY_BUFFER_LENGTH = 10_000
 EPISODE_SAVE_RATE = 25
-CHECKPOINTS_PATH = 'gymnasium/checkpoints/carracing_master/episode_{episode_idx}'
+EXPERIMENT_NAME = 'master_lowerlr_nomaxsteps/'
+CHECKPOINTS_PARENT_DIRECTORY = 'gymnasium/checkpoints/carracing_master/'
+CHECKPOINTS_SAVE_SUB_DIRECTORY = EXPERIMENT_NAME
+CHECKPOINTS_LOAD_SUB_DIRECTORY = 'master_actionrepeat/'
+CHECKPOINTS_SAVE_PATH = CHECKPOINTS_PARENT_DIRECTORY + CHECKPOINTS_SAVE_SUB_DIRECTORY + 'episode_{episode_idx}.pth'
+REPEAT_ACTION_NUMBER = 6
+NEGATIVE_ENFORCEMENT_FACTOR = 5
 
 replay_buffer_reset_step_counter = 0
 
-writer = SummaryWriter("gymnasium/runs/carracing_master")
+writer = SummaryWriter("gymnasium/runs/carracing_master/" + EXPERIMENT_NAME)
+
+checkpoint = None
+LOAD_EPISODE = 950
+load_checkpoint_path = CHECKPOINTS_PARENT_DIRECTORY + CHECKPOINTS_LOAD_SUB_DIRECTORY + f'episode_{LOAD_EPISODE}.pth'
+if os.path.exists(load_checkpoint_path):
+    checkpoint = chkpts.load_checkpoint(load_checkpoint_path=load_checkpoint_path)
 
 state_width = 96
 state_height = 96
@@ -64,8 +75,18 @@ agent = MichaelSchumacherDiscrete(
 empty_state = torch.zeros(state_width, state_height)
 replay_buffer = deque(maxlen=MAX_REPLAY_BUFFER_LENGTH)
 global_step_counter = 0
+episode_start_number = 0
 
-for episode_idx in range(NUM_EPISODES):
+if checkpoint is not None:
+    # TODO: Reactivate, once lr is properly set in checkpoint
+    # agent.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    agent.policy_network.load_state_dict(checkpoint['policy_network_state_dict'])
+    agent.target_network.load_state_dict(checkpoint['target_network_state_dict'])
+    agent.epsilon = checkpoint['epsilon']
+    episode_start_number = checkpoint['episode_idx']
+
+
+for episode_idx in range(episode_start_number, NUM_EPISODES):
     
     state, info = env.reset()
 
@@ -134,7 +155,7 @@ for episode_idx in range(NUM_EPISODES):
         chkpts.save_checkpoint(
             agent=agent, 
             episode_idx=episode_idx, 
-            save_checkpoint_path=CHECKPOINTS_PATH.format(episode_idx=episode_idx)
+            save_checkpoint_path_str=CHECKPOINTS_SAVE_PATH.format(episode_idx=episode_idx)
         )
 
     if agent.epsilon <= agent.epsilon_init * 0.2:
