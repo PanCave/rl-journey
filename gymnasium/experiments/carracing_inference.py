@@ -11,8 +11,8 @@ import utils.checkpoints as chkpts
 from agents.carracing_agent import DQN, MichaelSchumacherDiscrete
 import utils.preprocessing as prep
 
-LOAD_EPISODE = 10
-CHECKPOINT_PATH = f'gymnasium/checkpoints/carracing_master/episode_{LOAD_EPISODE}.pth.pth'
+LOAD_EPISODE = 1425
+CHECKPOINT_PATH = f'gymnasium/checkpoints/carracing_master/master_lowerlr_nomaxsteps/episode_{LOAD_EPISODE}.pth'
 checkpoint = chkpts.load_checkpoint(CHECKPOINT_PATH)
 
 env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, domain_randomize=True, continuous=False, max_episode_steps=-1)
@@ -65,8 +65,7 @@ for _ in range(20):
         else:
             non_positive_reward_counter = 0
         
-        if non_positive_reward_counter >= 50 + (agent.epsilon * 150):
-            print("Breche ab")
+        if non_positive_reward_counter >= 200:
             terminated = True
         
         if info != {}:
