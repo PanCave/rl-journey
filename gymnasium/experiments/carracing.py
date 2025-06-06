@@ -98,8 +98,8 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
     print(f'Episode {episode_idx}, Epsilon: {agent.epsilon}')
     writer.add_scalar("Epsilon", agent.epsilon, episode_idx)
 
-    states_queue = deque(maxlen=number_of_frames, iterable=[empty_state] * 3)
-    next_states_queue = deque(maxlen=number_of_frames, iterable=[empty_state] * 3)
+    grayscaled = prep.convert_to_grayscale(state)
+    states_queue = deque(maxlen=number_of_frames, iterable=[empty_state]*2 + [grayscaled])
 
     for _ in range(50):
         env.step(0)
@@ -111,15 +111,27 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
         states_queue.append(grayscaled_state)
         agent_state = prep.deque_to_tensor(states_queue)
         action = agent.select_action(agent_state)
+
+        repeat_action_reward = 0
+        for _ in range(REPEAT_ACTION_NUMBER):
+            next_state, reward, terminated, truncated, info = env.step(action)
+            repeat_action_reward += reward
+
+            next_grayscaled_state = prep.convert_to_grayscale(state=next_state)
+            states_queue.append(next_grayscaled_state)
+
+            if truncated or terminated:
+                break
+
+            state = next_state
         
-        next_state, reward, terminated, truncated, info = env.step(action)
         episode_step_counter += 1
 
-        sum_episode_reward += reward
+        next_agent_state = prep.deque_to_tensor(states_queue)
 
-        grayscaled_next_state = prep.convert_to_grayscale(next_state)
-        next_states_queue.append(grayscaled_next_state)
-        next_agent_state = prep.deque_to_tensor(next_states_queue)
+        if repeat_action_reward < 0:
+            repeat_action_reward *= NEGATIVE_ENFORCEMENT_FACTOR
+        sum_episode_reward += repeat_action_reward
 
         if reward < 0:
             non_positive_reward_counter += 1
@@ -130,7 +142,7 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
             print(f'Episode {episode_idx} abgebrochen nach {episode_step_counter} Schritten')
             terminated = True
         
-        experience = Replay(agent_state, action, reward, next_agent_state, terminated or truncated)
+        experience = Replay(agent_state, action, repeat_action_reward, next_agent_state, terminated or truncated)
         replay_buffer.append(experience)
         
         experience_buffer = list(replay_buffer)
