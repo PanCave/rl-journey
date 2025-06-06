@@ -14,6 +14,7 @@ from agents.carracing_agent import MichaelSchumacherDiscrete, DQN
 from utils.dataclasses import Replay
 import utils.preprocessing as prep
 import utils.checkpoints as chkpts
+import utils.batch_sampling as bts
 
 BATCH_SIZE = 256
 REPLAY_BUFFER_RESET_STEPS = 1000
@@ -33,10 +34,10 @@ else:
 env = gym.make('CarRacing-v3', render_mode='rgb_array', lap_complete_percent=0.95, domain_randomize=True, continuous=False)
 
 NUM_EPISODES = 10_000
-NUM_TIMESTEPS = 1_000
+NUM_TIMESTEPS = 10_000
 MAX_REPLAY_BUFFER_LENGTH = 10_000
-EPISODE_SAVE_RATE = 10
-CHECKPOINTS_PATH = 'gymnasium/checkpoints/carracing_master/episode_{episode_idx}.pth'
+EPISODE_SAVE_RATE = 25
+CHECKPOINTS_PATH = 'gymnasium/checkpoints/carracing_master/episode_{episode_idx}'
 
 replay_buffer_reset_step_counter = 0
 
@@ -54,7 +55,7 @@ agent = MichaelSchumacherDiscrete(
     num_target_update_steps=2000,
     epsilon_init=1,    # Startwert für Epsilon
     epsilon_min=0.001, # Minimaler Epsilon-Wert
-    epsilon_decay_rate=0.999,      # Abnahmerate von Epsilon
+    epsilon_decay_rate=0.995,      # Abnahmerate von Epsilon
     gamma=0.95,          # Discount-Faktor
     optimizer=optimizer,
     device=device,
@@ -62,8 +63,6 @@ agent = MichaelSchumacherDiscrete(
 )
 empty_state = torch.zeros(state_width, state_height)
 replay_buffer = deque(maxlen=MAX_REPLAY_BUFFER_LENGTH)
-states_queue = deque(maxlen=number_of_frames, iterable=[empty_state] * 3)
-next_states_queue = deque(maxlen=number_of_frames, iterable=[empty_state] * 3)
 global_step_counter = 0
 
 for episode_idx in range(NUM_EPISODES):
@@ -77,6 +76,9 @@ for episode_idx in range(NUM_EPISODES):
 
     print(f'Episode {episode_idx}, Epsilon: {agent.epsilon}')
     writer.add_scalar("Epsilon", agent.epsilon, episode_idx)
+
+    states_queue = deque(maxlen=number_of_frames, iterable=[empty_state] * 3)
+    next_states_queue = deque(maxlen=number_of_frames, iterable=[empty_state] * 3)
 
     for _ in range(50):
         env.step(0)
@@ -112,17 +114,16 @@ for episode_idx in range(NUM_EPISODES):
         
         experience_buffer = list(replay_buffer)
         if len(experience_buffer) >= BATCH_SIZE and timestep % 4 == 0:
-            batch = random.sample(experience_buffer, BATCH_SIZE)
+            batch = bts.sample_with_high_rewards_prioritized(experience_buffer, BATCH_SIZE)
             loss = agent.train(batch)
             sum_episode_loss += loss
-
-        if global_step_counter % 10 == 0:
-            agent.update_epsilon()
         
         if terminated or truncated:
             break
         
         state = next_state
+
+    agent.update_epsilon()
 
     mean_episode_reward = sum_episode_reward / episode_step_counter
     writer.add_scalar("Mean Reward / Episode", mean_episode_reward, episode_idx)
@@ -136,8 +137,8 @@ for episode_idx in range(NUM_EPISODES):
             save_checkpoint_path=CHECKPOINTS_PATH.format(episode_idx=episode_idx)
         )
 
-    if agent.epsilon <= agent.epsilon_init * 0.3:
-        agent.epsilon_init *= 0.8
+    if agent.epsilon <= agent.epsilon_init * 0.2:
+        agent.epsilon_init *= 0.7
         agent.reset_epsilon()
     
 

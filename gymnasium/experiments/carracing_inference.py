@@ -9,10 +9,10 @@ import torch
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import utils.checkpoints as chkpts
 from agents.carracing_agent import DQN, MichaelSchumacherDiscrete
-from utils.preprocessing import Preprocessor
+import utils.preprocessing as prep
 
-LOAD_EPISODE = 0
-CHECKPOINT_PATH = f'gymnasium/checkpoints/carracing_master/episode_{LOAD_EPISODE}'
+LOAD_EPISODE = 10
+CHECKPOINT_PATH = f'gymnasium/checkpoints/carracing_master/episode_{LOAD_EPISODE}.pth.pth'
 checkpoint = chkpts.load_checkpoint(CHECKPOINT_PATH)
 
 env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, domain_randomize=True, continuous=False)
@@ -34,16 +34,14 @@ optimizer = torch.optim.Adam(dqn.parameters())
 agent = MichaelSchumacherDiscrete(
     env=env,
     num_target_update_steps=100,
-    epsilon_init=0,    # Startwert für Epsilon
-    epsilon_min=0, # Minimaler Epsilon-Wert
-    epsilon_decay_rate=0.995,      # Abnahmerate von Epsilon
+    epsilon_init=1,    # Startwert für Epsilon
+    epsilon_min=0.1, # Minimaler Epsilon-Wert
+    epsilon_decay_rate=0.999,      # Abnahmerate von Epsilon
     gamma=0.9,          # Discount-Faktor
     optimizer=optimizer,
     device=device,
     policy_network=dqn
 )
-
-preprocessor = Preprocessor(device=device)
 
 empty_state = torch.zeros(state_width, state_height)
 states_queue = deque(maxlen=number_of_frames, iterable=[empty_state] * 3)
@@ -52,15 +50,27 @@ agent.policy_network.load_state_dict(checkpoint['policy_network_state_dict'])
 
 for _ in range(20):
     state, _ = env.reset()
+    non_positive_reward_counter = 0
 
     while True:
-        grayscaled_state = preprocessor.convert_to_grayscale(state=state)
+        grayscaled_state = prep.convert_to_grayscale(state=state)
         states_queue.append(grayscaled_state)
-        agent_state = preprocessor.deque_to_tensor(states_queue)
+        agent_state = prep.deque_to_tensor(states_queue)
         action = agent.select_action(agent_state, inference_only=True)
 
-        state, _, terminated, truncated, info = env.step(action=action)
-        print(info)
+        state, reward, terminated, truncated, info = env.step(action=action)
+
+        if reward < 0:
+            non_positive_reward_counter += 1
+        else:
+            non_positive_reward_counter = 0
+        
+        if non_positive_reward_counter >= 50 + (agent.epsilon * 150):
+            print("Breche ab")
+            terminated = True
+        
+        if info != {}:
+            print(info)
 
         if terminated or truncated:
             break
