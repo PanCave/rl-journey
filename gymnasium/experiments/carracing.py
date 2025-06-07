@@ -132,6 +132,9 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
         if repeat_action_reward < 0:
             repeat_action_reward *= NEGATIVE_ENFORCEMENT_FACTOR
         sum_episode_reward += repeat_action_reward
+        
+        experience = Replay(agent_state, action, repeat_action_reward, next_agent_state, terminated or truncated)
+        replay_buffer.append(experience)
 
         if reward < 0:
             non_positive_reward_counter += 1
@@ -141,9 +144,6 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
         if non_positive_reward_counter >= 50 + (agent.epsilon * 150):
             print(f'Episode {episode_idx} abgebrochen nach {episode_step_counter} Schritten')
             terminated = True
-        
-        experience = Replay(agent_state, action, repeat_action_reward, next_agent_state, terminated or truncated)
-        replay_buffer.append(experience)
         
         experience_buffer = list(replay_buffer)
         if len(experience_buffer) >= BATCH_SIZE and timestep % 4 == 0:
