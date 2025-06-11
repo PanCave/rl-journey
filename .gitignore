@@ -17,3 +17,5 @@ gymnasium/runs
 .venv
 gymnasium/videos
 gymnasium/gifs
+gymnasium/rl_venv
+gymnasium/gymnasium
