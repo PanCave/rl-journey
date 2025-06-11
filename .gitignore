@@ -15,3 +15,5 @@ gymnasium/checkpoints
 gymnasium/runs
 .DS_Store
 .venv
+gymnasium/videos
+gymnasium/gifs

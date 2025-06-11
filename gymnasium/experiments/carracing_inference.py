@@ -3,6 +3,7 @@ import os
 from collections import deque
 
 import gymnasium as gym
+from gymnasium.wrappers import RecordVideo
 import torch
 
 # Add the parent directory to sys.path
@@ -11,11 +12,19 @@ import utils.checkpoints as chkpts
 from agents.carracing_agent import DQN, MichaelSchumacherDiscrete
 import utils.preprocessing as prep
 
-LOAD_EPISODE = 1425
-CHECKPOINT_PATH = f'gymnasium/checkpoints/carracing_master/master_lowerlr_nomaxsteps/episode_{LOAD_EPISODE}.pth'
+# Create gifs directory if it doesn't exist
+VIDEO_DIRECTORY = 'gymnasium/videos/'
+os.makedirs(VIDEO_DIRECTORY, exist_ok=True)
+
+LOAD_EPISODE = 600
+CHECKPOINTS_DIRECTORY = 'gymnasium/checkpoints/carracing_master/'
+EXPERIMENT_NAME = 'master_lrschedule'
+CHECKPOINT_PATH = CHECKPOINTS_DIRECTORY + EXPERIMENT_NAME + f'/episode_{LOAD_EPISODE}.pth'
 checkpoint = chkpts.load_checkpoint(CHECKPOINT_PATH)
 
+episode_trigger = lambda t: True
 env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, domain_randomize=True, continuous=False, max_episode_steps=-1)
+#env = RecordVideo(env, video_folder=VIDEO_DIRECTORY + EXPERIMENT_NAME, name_prefix=EXPERIMENT_NAME, fps=60, episode_trigger=episode_trigger, disable_logger=True)
 
 if torch.cuda.is_available():
     device = 'cuda'
@@ -24,9 +33,9 @@ elif torch.mps.is_available():
 else:
     device = 'cpu'
 
-state_width = 96
-state_height = 96
-number_of_frames = 3
+state_width = 84
+state_height = 84
+number_of_frames = 4
 input_shape = (state_width, state_height, number_of_frames)
 output_shape = 5
 dqn = DQN(input_shape=input_shape, action_dim=output_shape)
@@ -48,11 +57,11 @@ states_queue = deque(maxlen=number_of_frames, iterable=[empty_state] * 3)
 
 agent.policy_network.load_state_dict(checkpoint['policy_network_state_dict'])
 
-for _ in range(20):
+for episode_idx in range(20):
     state, _ = env.reset()
     non_positive_reward_counter = 0
 
-    while True:
+    while True:        
         grayscaled_state = prep.convert_to_grayscale(state=state)
         states_queue.append(grayscaled_state)
         agent_state = prep.deque_to_tensor(states_queue)
@@ -70,6 +79,8 @@ for _ in range(20):
         
         if info != {}:
             print(info)
+            if info['lap_finished']:
+                print(episode_idx)
 
         if terminated or truncated:
             break

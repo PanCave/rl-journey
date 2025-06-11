@@ -29,7 +29,9 @@ class DQN(nn.Module):
         # Fully connected layers (3 hidden layers with 128 neurons each)
         self.fc_layers = nn.Sequential(
             nn.Linear(conv_output_size, 512),
+            nn.ReLU(),
             nn.Linear(512, 128),
+            nn.ReLU(),
             nn.Linear(128, action_dim)
         )
 

@@ -7,6 +7,7 @@ import torchvision.transforms.functional  as F
 
 def convert_to_grayscale(state: NDArray) -> torch.Tensor:
     # input: whc -> output: chw
+    state = state[6:-6, :-12, :]
     state_tensor = torch.tensor(state).permute(2, 1, 0).unsqueeze(0)
     grayscaled_state = F.rgb_to_grayscale(state_tensor)
 
