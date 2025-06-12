@@ -10,13 +10,15 @@ from collections import deque
 import torch
 
 from agents.discrete_agent import DiscreteAgent
-from networks.car_racing_dqn import CarRacingDQN
+from networks.dk_dqn import DKDQN
 from utils.dataclasses import Replay
 import utils.preprocessing as prep
 import utils.checkpoints as chkpts
 import utils.batch_sampling as bts
 from torch.optim import Adam
-from torch.optim.lr_scheduler import ExponentialLR
+import ale_py
+
+gym.register_envs(ale_py)
 
 BATCH_SIZE = 256
 REPLAY_BUFFER_RESET_STEPS = 1000
@@ -24,32 +26,27 @@ REPLAY_BUFFER_RESET_STEPS = 1000
 if torch.cuda.is_available():
     device = 'cuda'
 elif torch.mps.is_available():
-    device = 'mps'  # GOAT
+    device = 'mps'  # SCHMUTZ
 else:
     device = 'cpu'
 
-# 0 nothing
-# 1 left
-# 2 right
-# 3 gas
-# 4 brake
-env = gym.make('CarRacing-v3', render_mode='rgb_array', lap_complete_percent=0.95, domain_randomize=True, continuous=False, max_episode_steps=-1)
+env = gym.make('ALE/DonkeyKong-v5', render_mode='rgb_array', obs_type='grayscale')
 
 NUM_EPISODES = 10_000
 NUM_TIMESTEPS = 10_000
 MAX_REPLAY_BUFFER_LENGTH = 10_000
 EPISODE_SAVE_RATE = 25
-EXPERIMENT_NAME = 'master_lrschedule/'
-CHECKPOINTS_PARENT_DIRECTORY = 'gymnasium/checkpoints/carracing_master/'
+EXPERIMENT_NAME = 'julius_dk/'
+CHECKPOINTS_PARENT_DIRECTORY = 'gymnasium/checkpoints/julius_dk/'
 CHECKPOINTS_SAVE_SUB_DIRECTORY = EXPERIMENT_NAME
-CHECKPOINTS_LOAD_SUB_DIRECTORY = 'master_nonlinear/'
+CHECKPOINTS_LOAD_SUB_DIRECTORY = 'julius_dk/'
 CHECKPOINTS_SAVE_PATH = CHECKPOINTS_PARENT_DIRECTORY + CHECKPOINTS_SAVE_SUB_DIRECTORY + 'episode_{episode_idx}.pth'
 REPEAT_ACTION_NUMBER = 6
-STATE_SLICES = (slice(6, -6), slice(None, -12), slice(None, None))
+STATE_SLICES = (slice(None, None), slice(None, None), slice(None, None))
 
 replay_buffer_reset_step_counter = 0
 
-writer = SummaryWriter("gymnasium/runs/carracing_master/" + EXPERIMENT_NAME)
+writer = SummaryWriter("gymnasium/runs/julius_dk/" + EXPERIMENT_NAME)
 
 checkpoint = None
 LOAD_EPISODE = -1
@@ -57,13 +54,13 @@ load_checkpoint_path = CHECKPOINTS_PARENT_DIRECTORY + CHECKPOINTS_LOAD_SUB_DIREC
 if os.path.exists(load_checkpoint_path):
     checkpoint = chkpts.load_checkpoint(load_checkpoint_path=load_checkpoint_path)
 
-state_width = 84
-state_height = 84
+state_width = 160
+state_height = 210
 number_of_frames = 4
-input_shape = (state_width, state_height, number_of_frames)
-output_shape = 5
-dqn = CarRacingDQN(input_shape=input_shape, action_dim=output_shape)
-optimizer = Adam(dqn.parameters(), lr=0.0001)
+input_shape = (state_height, state_width, number_of_frames)
+output_shape = 18
+dqn = DKDQN(input_shape=input_shape, action_dim=output_shape)
+optimizer = Adam(dqn.parameters(), lr=0.001)
 agent = DiscreteAgent(
     env=env,
     num_target_update_steps=2000,
@@ -75,7 +72,7 @@ agent = DiscreteAgent(
     device=device,
     policy_network=dqn
 )
-empty_state = torch.zeros(state_width, state_height)
+empty_state = torch.zeros(state_height, state_width)
 replay_buffer = deque(maxlen=MAX_REPLAY_BUFFER_LENGTH)
 global_step_counter = 0
 episode_start_number = 0
@@ -101,7 +98,7 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
     print(f'Episode {episode_idx}, Epsilon: {agent.epsilon}')
     writer.add_scalar("Epsilon", agent.epsilon, episode_idx)
 
-    grayscaled = prep.convert_to_grayscale(state, slices=STATE_SLICES)
+    grayscaled = prep.convert_to_tensor(state, device=device)
     states_queue = deque(maxlen=number_of_frames, iterable=[empty_state]*(number_of_frames - 1) + [grayscaled])
 
     for _ in range(50):
@@ -110,7 +107,7 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
     for timestep in range(NUM_TIMESTEPS):
         global_step_counter += 1
 
-        grayscaled_state = prep.convert_to_grayscale(state=state, slices=STATE_SLICES)
+        grayscaled_state = prep.convert_to_tensor(state=state, device=device)
         states_queue.append(grayscaled_state)
         agent_state = prep.deque_to_tensor(states_queue)
         action = agent.select_action(agent_state)
@@ -121,23 +118,13 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
             episode_step_counter += 1
             repeat_action_reward += reward
 
-            next_grayscaled_state = prep.convert_to_grayscale(state=next_state, slices=STATE_SLICES)
+            next_grayscaled_state = prep.convert_to_tensor(state=next_state, device=device)
             states_queue.append(next_grayscaled_state)
-
-            if reward < 0:
-                non_positive_reward_counter += 1
-            else:
-                non_positive_reward_counter = 0
-            
-            if non_positive_reward_counter >= 50 + (agent.epsilon * 150):
-                print(f'Episode {episode_idx} abgebrochen nach {episode_step_counter} Schritten')
-                terminated = True
 
             if truncated or terminated:
                 break
 
-            state = next_state
-        
+            state = next_state        
 
         next_agent_state = prep.deque_to_tensor(states_queue)
 

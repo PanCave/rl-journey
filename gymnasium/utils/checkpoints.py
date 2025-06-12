@@ -1,13 +1,14 @@
+import os
+
 from pathlib import Path
 from typing import Any
 
 import torch
 
-from agents.carracing_agent import MichaelSchumacherDiscrete
-
+from agents.discrete_agent import DiscreteAgent
 
 def save_checkpoint(
-        agent: MichaelSchumacherDiscrete,
+        agent: DiscreteAgent,
         episode_idx: int,
         save_checkpoint_path_str: str) -> None:
     
@@ -25,5 +26,9 @@ def save_checkpoint(
     }
     torch.save(save_dict, save_checkpoint_path_str)
 
-def load_checkpoint(load_checkpoint_path: str) -> dict[str: Any]:
-    return torch.load(load_checkpoint_path, weights_only=False)
+def load_checkpoint(load_checkpoint_path: str) -> dict[str: Any] | None:
+    if os.path.exists(load_checkpoint_path):
+        print("Checkpoint found!")
+        return torch.load(load_checkpoint_path, weights_only=False)
+    
+    return None

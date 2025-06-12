@@ -9,36 +9,40 @@ import torch
 # Add the parent directory to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import utils.checkpoints as chkpts
-from agents.discrete_agent import CarRacingDQN, DiscreteAgent
+from agents.discrete_agent import DiscreteAgent
+from networks.dk_dqn import DKDQN
 import utils.preprocessing as prep
+import ale_py
+
+gym.register_envs(ale_py)
 
 # Create gifs directory if it doesn't exist
 VIDEO_DIRECTORY = 'gymnasium/videos/'
 os.makedirs(VIDEO_DIRECTORY, exist_ok=True)
 
-LOAD_EPISODE = 600
-CHECKPOINTS_DIRECTORY = 'gymnasium/checkpoints/carracing_master/'
+LOAD_EPISODE = 525
+CHECKPOINTS_DIRECTORY = 'gymnasium/checkpoints/julius_dk/'
 EXPERIMENT_NAME = 'master_lrschedule'
 CHECKPOINT_PATH = CHECKPOINTS_DIRECTORY + EXPERIMENT_NAME + f'/episode_{LOAD_EPISODE}.pth'
 checkpoint = chkpts.load_checkpoint(CHECKPOINT_PATH)
 
 episode_trigger = lambda t: True
-env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, domain_randomize=True, continuous=False, max_episode_steps=-1)
+env = gym.make('ALE/DonkeyKong-v5', render_mode='human', obs_type='rgb', max_episode_steps=-1)
 #env = RecordVideo(env, video_folder=VIDEO_DIRECTORY + EXPERIMENT_NAME, name_prefix=EXPERIMENT_NAME, fps=60, episode_trigger=episode_trigger, disable_logger=True)
 
 if torch.cuda.is_available():
     device = 'cuda'
 elif torch.mps.is_available():
-    device = 'mps'  # GOAT
+    device = 'mps'  # SCHMUTZ
 else:
     device = 'cpu'
 
-state_width = 84
-state_height = 84
+state_width = 210
+state_height = 160
 number_of_frames = 4
-input_shape = (state_width, state_height, number_of_frames)
-output_shape = 5
-dqn = CarRacingDQN(input_shape=input_shape, action_dim=output_shape)
+input_shape = (state_height, state_width, number_of_frames)
+output_shape = 18
+dqn = DKDQN(input_shape=input_shape, action_dim=output_shape)
 optimizer = torch.optim.Adam(dqn.parameters())
 agent = DiscreteAgent(
     env=env,
@@ -52,10 +56,11 @@ agent = DiscreteAgent(
     policy_network=dqn
 )
 
-empty_state = torch.zeros(state_width, state_height)
+empty_state = torch.zeros(state_height, state_width)
 states_queue = deque(maxlen=number_of_frames, iterable=[empty_state] * 3)
 
-agent.policy_network.load_state_dict(checkpoint['policy_network_state_dict'])
+if checkpoint:
+    agent.policy_network.load_state_dict(checkpoint['policy_network_state_dict'])
 
 for episode_idx in range(20):
     state, _ = env.reset()
@@ -68,6 +73,7 @@ for episode_idx in range(20):
         action = agent.select_action(agent_state, inference_only=True)
 
         state, reward, terminated, truncated, info = env.step(action=action)
+        print(reward)
 
         if reward < 0:
             non_positive_reward_counter += 1
@@ -76,11 +82,6 @@ for episode_idx in range(20):
         
         if non_positive_reward_counter >= 200:
             terminated = True
-        
-        if info != {}:
-            print(info)
-            if info['lap_finished']:
-                print(episode_idx)
 
         if terminated or truncated:
             break
