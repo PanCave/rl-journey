@@ -39,10 +39,10 @@ NUM_EPISODES = 10_000
 NUM_TIMESTEPS = 10_000
 MAX_REPLAY_BUFFER_LENGTH = 10_000
 EPISODE_SAVE_RATE = 25
-EXPERIMENT_NAME = 'master_lrschedule/'
+EXPERIMENT_NAME = 'master_cpu_haltpunish/'
 CHECKPOINTS_PARENT_DIRECTORY = 'gymnasium/checkpoints/carracing_master/'
 CHECKPOINTS_SAVE_SUB_DIRECTORY = EXPERIMENT_NAME
-CHECKPOINTS_LOAD_SUB_DIRECTORY = 'master_nonlinear/'
+CHECKPOINTS_LOAD_SUB_DIRECTORY = 'master_cpu/'
 CHECKPOINTS_SAVE_PATH = CHECKPOINTS_PARENT_DIRECTORY + CHECKPOINTS_SAVE_SUB_DIRECTORY + 'episode_{episode_idx}.pth'
 REPEAT_ACTION_NUMBER = 6
 STATE_SLICES = (slice(6, -6), slice(None, -12), slice(None, None))
@@ -52,7 +52,7 @@ replay_buffer_reset_step_counter = 0
 writer = SummaryWriter("gymnasium/runs/carracing_master/" + EXPERIMENT_NAME)
 
 checkpoint = None
-LOAD_EPISODE = -1
+LOAD_EPISODE = 1500
 load_checkpoint_path = CHECKPOINTS_PARENT_DIRECTORY + CHECKPOINTS_LOAD_SUB_DIRECTORY + f'episode_{LOAD_EPISODE}.pth'
 if os.path.exists(load_checkpoint_path):
     checkpoint = chkpts.load_checkpoint(load_checkpoint_path=load_checkpoint_path)
@@ -117,12 +117,15 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
 
         repeat_action_reward = 0
         for _ in range(REPEAT_ACTION_NUMBER):
-            next_state, reward, terminated, truncated, info = env.step(action)
+            next_state, reward, terminated, truncated, info = env.step(1)
             episode_step_counter += 1
             repeat_action_reward += reward
 
             next_grayscaled_state = prep.convert_to_grayscale(state=next_state, slices=STATE_SLICES)
             states_queue.append(next_grayscaled_state)
+            
+            if prep.are_states_equal(states_queue[-1], states_queue[-2], 40, 56, 30, 90):
+                repeat_action_reward -= 2
 
             if reward < 0:
                 non_positive_reward_counter += 1

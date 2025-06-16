@@ -9,18 +9,21 @@ import torch
 # Add the parent directory to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import utils.checkpoints as chkpts
-from agents.discrete_agent import CarRacingDQN, DiscreteAgent
+from agents.discrete_agent import DiscreteAgent
 import utils.preprocessing as prep
+from networks.car_racing_dqn import CarRacingDQN
 
 # Create gifs directory if it doesn't exist
 VIDEO_DIRECTORY = 'gymnasium/videos/'
 os.makedirs(VIDEO_DIRECTORY, exist_ok=True)
 
-LOAD_EPISODE = 600
+LOAD_EPISODE = -1
 CHECKPOINTS_DIRECTORY = 'gymnasium/checkpoints/carracing_master/'
-EXPERIMENT_NAME = 'master_lrschedule'
+EXPERIMENT_NAME = 'master_cpu_haltpunish'
 CHECKPOINT_PATH = CHECKPOINTS_DIRECTORY + EXPERIMENT_NAME + f'/episode_{LOAD_EPISODE}.pth'
 checkpoint = chkpts.load_checkpoint(CHECKPOINT_PATH)
+
+STATE_SLICES = (slice(6, -6), slice(None, -12), slice(None, None))
 
 episode_trigger = lambda t: True
 env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, domain_randomize=True, continuous=False, max_episode_steps=-1)
@@ -62,7 +65,7 @@ for episode_idx in range(20):
     non_positive_reward_counter = 0
 
     while True:        
-        grayscaled_state = prep.convert_to_grayscale(state=state)
+        grayscaled_state = prep.convert_to_grayscale(state=state, slices=STATE_SLICES)
         states_queue.append(grayscaled_state)
         agent_state = prep.deque_to_tensor(states_queue)
         action = agent.select_action(agent_state, inference_only=True)
