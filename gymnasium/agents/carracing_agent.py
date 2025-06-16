@@ -29,7 +29,9 @@ class DQN(nn.Module):
         # Fully connected layers (3 hidden layers with 128 neurons each)
         self.fc_layers = nn.Sequential(
             nn.Linear(conv_output_size, 512),
+            nn.ReLU(),
             nn.Linear(512, 128),
+            nn.ReLU(),
             nn.Linear(128, action_dim)
         )
 
@@ -113,18 +115,17 @@ class MichaelSchumacherDiscrete:
         self.epsilon = self.epsilon_init
 
     def train(self,
-              replay_batch: List[Replay]) -> int:
+              replay_batch: List[Replay]) -> float:
         # Update target network after n steps
         self.target_net_update_step_counter += 1
-        if (self.target_net_update_step_counter == self.num_target_update_steps):
+        if (self.target_net_update_step_counter >= self.num_target_update_steps):
             self.target_network.load_state_dict(self.policy_network.state_dict())
             self.target_net_update_step_counter = 0
-
+            print("Updated Targe Network")
         self.policy_network.train()
 
         # Get q_values
-        states = np.array([replay.state for replay in replay_batch])
-        states_tensor = torch.tensor(states, device=self.device)
+        states_tensor = torch.stack([replay.state for replay in replay_batch]).to(device=self.device)
         actions = np.array([replay.action for replay in replay_batch])
         actions_tensor = torch.tensor(actions, dtype=torch.long, device=self.device)
         q_values_batch = self.policy_network.forward(states_tensor)
@@ -132,24 +133,24 @@ class MichaelSchumacherDiscrete:
         q_values = q_values_batch[indexes, actions_tensor]
 
         # Get q*_values
-        next_states = np.array([replay.next_state for replay in replay_batch])
-        next_states_tensor = torch.tensor(next_states, device=self.device)
+        next_states_tensor = torch.stack([replay.next_state for replay in replay_batch]).to(device=self.device)
 
         with torch.no_grad():
-            done_mask = np.array([replay.done for replay in replay_batch])
-            done_mask_tensor = torch.tensor(done_mask, device=self.device, dtype=torch.bool)
             next_q_values = self.target_network.forward(next_states_tensor)
 
+        done_mask = np.array([replay.done for replay in replay_batch])
+        done_mask_tensor = torch.tensor(done_mask, device=self.device, dtype=torch.bool)
         max_next_q_values = torch.max(
             input = next_q_values,
             dim = -1).values
         max_next_q_values[done_mask_tensor] = 0.0
+
         rewards = torch.tensor([replay.reward for replay in replay_batch], device=self.device)
 
         # bellman equation
         optimal_values = rewards + self.gamma * max_next_q_values
 
-        loss = F.huber_loss(q_values, optimal_values, delta=1)
+        loss = F.huber_loss(q_values, optimal_values)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
