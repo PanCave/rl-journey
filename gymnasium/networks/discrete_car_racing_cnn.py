@@ -1,9 +1,9 @@
 import torch.nn as nn
 import torch
 
-class CarRacingDQN(nn.Module):
-    def __init__(self, input_shape, action_dim):
-        super(CarRacingDQN, self).__init__()
+class DiscreteCarRacingCNN(nn.Module):
+    def __init__(self, input_shape, output_size):
+        super(DiscreteCarRacingCNN, self).__init__()
         # CNN layers to process the image
         self.conv_layers = nn.Sequential(
             nn.Conv2d(input_shape[2], 16, kernel_size=8, stride=1),
@@ -23,7 +23,7 @@ class CarRacingDQN(nn.Module):
             nn.ReLU(),
             nn.Linear(512, 128),
             nn.ReLU(),
-            nn.Linear(128, action_dim)
+            nn.Linear(128, output_size)
         )
 
     def _get_conv_output(self, shape) -> int:

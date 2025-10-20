@@ -10,7 +10,7 @@ from collections import deque
 import torch
 
 from agents.discrete_agent import DiscreteAgent
-from networks.car_racing_dqn import CarRacingDQN
+from networks.discrete_car_racing_cnn import DiscreteCarRacingCNN
 from utils.dataclasses import Replay
 import utils.preprocessing as prep
 import utils.checkpoints as chkpts
@@ -62,7 +62,7 @@ state_height = 84
 number_of_frames = 4
 input_shape = (state_width, state_height, number_of_frames)
 output_shape = 5
-dqn = CarRacingDQN(input_shape=input_shape, action_dim=output_shape)
+dqn = DiscreteCarRacingCNN(input_shape=input_shape, output_size=output_shape)
 optimizer = Adam(dqn.parameters(), lr=0.0001)
 agent = DiscreteAgent(
     env=env,
@@ -168,7 +168,7 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
     writer.add_scalar("Episode Step Counter", episode_step_counter, episode_idx)
 
     if episode_idx > 0 and episode_idx % EPISODE_SAVE_RATE == 0:
-        chkpts.save_checkpoint(
+        chkpts.save_dqn_checkpoint(
             agent=agent, 
             episode_idx=episode_idx, 
             save_checkpoint_path_str=CHECKPOINTS_SAVE_PATH.format(episode_idx=episode_idx)

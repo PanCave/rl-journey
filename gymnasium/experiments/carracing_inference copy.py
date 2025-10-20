@@ -3,36 +3,33 @@ import os
 from collections import deque
 
 import gymnasium as gym
-from gymnasium.wrappers import RecordVideo
 import torch
 
 # Add the parent directory to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import utils.checkpoints as chkpts
-from agents.discrete_agent import DiscreteAgent
+from agents.continuous_agent import SACAgent
 import utils.preprocessing as prep
-from networks.discrete_car_racing_cnn import DiscreteCarRacingCNN
+from networks.continuous_car_racing_cnn import ContinuousCarRacingPolicy
 
 # Create gifs directory if it doesn't exist
 VIDEO_DIRECTORY = 'gymnasium/videos/'
 os.makedirs(VIDEO_DIRECTORY, exist_ok=True)
 
-LOAD_EPISODE = 1250
-CHECKPOINTS_DIRECTORY = 'gymnasium/checkpoints/carracing_master/'
-EXPERIMENT_NAME = 'master_cpu'
+LOAD_EPISODE = -1
+CHECKPOINTS_DIRECTORY = 'gymnasium/checkpoints/carracing_sac/'
+EXPERIMENT_NAME = 'sac_cpu'
 CHECKPOINT_PATH = CHECKPOINTS_DIRECTORY + EXPERIMENT_NAME + f'/episode_{LOAD_EPISODE}.pth'
 checkpoint = chkpts.load_checkpoint(CHECKPOINT_PATH)
 
 STATE_SLICES = (slice(6, -6), slice(None, -12), slice(None, None))
 
-episode_trigger = lambda t: True
-env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, domain_randomize=True, continuous=False, max_episode_steps=-1)
-#env = RecordVideo(env, video_folder=VIDEO_DIRECTORY + EXPERIMENT_NAME, name_prefix=EXPERIMENT_NAME, fps=60, episode_trigger=episode_trigger, disable_logger=True)
+env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, domain_randomize=True, continuous=True, max_episode_steps=-1)
 
 if torch.cuda.is_available():
     device = 'cuda'
 elif torch.mps.is_available():
-    device = 'mps'  # GOAT
+    device = 'mps'  # SCHMUTZ
 else:
     device = 'cpu'
 
@@ -41,18 +38,19 @@ state_height = 84
 number_of_frames = 4
 input_shape = (state_width, state_height, number_of_frames)
 output_shape = 5
-dqn = DiscreteCarRacingCNN(input_shape=input_shape, output_size=output_shape)
-optimizer = torch.optim.Adam(dqn.parameters())
-agent = DiscreteAgent(
+sac_policy = ContinuousCarRacingPolicy(input_shape=input_shape, action_dim=output_shape)
+optimizer = torch.optim.Adam(sac_policy.parameters())
+agent = SACAgent(
     env=env,
-    num_target_update_steps=100,
-    epsilon_init=1,    # Startwert für Epsilon
-    epsilon_min=0.1, # Minimaler Epsilon-Wert
-    epsilon_decay_rate=0.999,      # Abnahmerate von Epsilon
-    gamma=0.9,          # Discount-Faktor
+    num_target_update_steps=2000,
+    policy_network=sac_policy,
+    critic_1_network=None,
+    critic_2_network=None,
+    action_dim=output_shape,
+    alpha=1,
+    tau=0.95,
     optimizer=optimizer,
     device=device,
-    policy_network=dqn
 )
 
 empty_state = torch.zeros(state_width, state_height)
