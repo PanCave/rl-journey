@@ -1,0 +1,11 @@
+[project]
+name = "rl-journey"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "gymnasium[box2d]>=1.2.2",
+    "swig>=4.4.0",
+    "torchvision>=0.24.1",
+]
