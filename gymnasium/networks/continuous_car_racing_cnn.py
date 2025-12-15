@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 
 class ContinuousCarRacingPolicy(nn.Module):
-    def __init__(self, input_shape: int, action_dim: int):
+    def __init__(self, input_shape: tuple[int, int, int], action_dim: int):
         super(ContinuousCarRacingPolicy, self).__init__()
         # CNN layers to process the image
         self.conv_layers = nn.Sequential(
@@ -34,7 +34,7 @@ class ContinuousCarRacingPolicy(nn.Module):
 
         return x.flatten(1).size(1)
 
-    def forward(self, tensor_input: torch.Tensor):
+    def forward(self, tensor_input: torch.Tensor) -> torch.Tensor:
         # Ensure input has the right format (batch_size, channels, height, width)
         # Original shape: (batch_size, height, width, channels)
         # No longer needed, as we now permute in preprocessing
@@ -56,7 +56,7 @@ class ContinuousCarRacingPolicy(nn.Module):
     
     
 class ContinuousCarRacingCritic(nn.Module):
-    def __init__(self, input_shape: int, action_dim: int):
+    def __init__(self, input_shape: tuple[int, int, int], action_dim: int):
         super(ContinuousCarRacingCritic, self).__init__()
         # CNN layers to process the image
         self.conv_layers = nn.Sequential(
@@ -109,7 +109,7 @@ class ContinuousCarRacingCritic(nn.Module):
         
         # Fully connected layers
         fc1_output = self.fc_layers_1(flattened_conv_output)
-        stacked_fc2_input = torch.vstack(fc1_output, action)
+        stacked_fc2_input = torch.vstack([fc1_output, action])
         fc2_output  = self.fc_layers_2(stacked_fc2_input)
 
         return fc2_output

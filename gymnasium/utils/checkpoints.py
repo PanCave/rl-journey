@@ -43,7 +43,7 @@ def save_dqn_checkpoint(
     }
     torch.save(save_dict, save_checkpoint_path_str)
 
-def load_checkpoint(load_checkpoint_path: str) -> dict[str: Any] | None:
+def load_checkpoint(load_checkpoint_path: str) -> dict[str, Any] | None:
     if os.path.exists(load_checkpoint_path):
         print("Checkpoint found!")
         return torch.load(load_checkpoint_path, weights_only=False)
