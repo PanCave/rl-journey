@@ -10,8 +10,8 @@ from collections import deque
 import torch
 
 from agents.continuous_agent import SACAgent
-from networks.continuous_car_racing_cnn import ContinuousCarRacingPolicy
-from utils.dataclasses import Replay
+from networks.continuous_car_racing_cnn import ContinuousCarRacingPolicy, ContinuousCarRacingCritic
+from utils.dataclasses import ReplayContinuous
 import utils.preprocessing as prep
 import utils.checkpoints as chkpts
 import utils.batch_sampling as bts
@@ -60,13 +60,16 @@ number_of_frames = 4
 input_shape = (state_width, state_height, number_of_frames)
 output_shape = 3
 sac_policy = ContinuousCarRacingPolicy(input_shape=input_shape, action_dim=output_shape)
+critic_1_network = ContinuousCarRacingCritic(input_shape=input_shape, action_dim=1)
+critic_2_network = ContinuousCarRacingCritic(input_shape=input_shape, action_dim=1)
+
 optimizer = Adam(sac_policy.parameters(), lr=0.0001)
 agent = SACAgent(
     env=env,
     num_target_update_steps=2000,
     policy_network=sac_policy,
-    critic_1_network=None,
-    critic_2_network=None,
+    critic_1_network=critic_1_network,
+    critic_2_network=critic_2_network,
     action_dim=output_shape,
     alpha=1,
     tau=0.95,
@@ -79,11 +82,13 @@ global_step_counter = 0
 episode_start_number = 0
 
 if checkpoint is not None:
+    assert agent.critic_1_network is ContinuousCarRacingCritic
+    assert agent.critic_2_network is ContinuousCarRacingCritic
     # TODO: Reactivate, once lr is properly set in checkpoint
     # agent.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     agent.policy_network.load_state_dict(checkpoint['policy_network_state_dict'])
-    agent.target_network.load_state_dict(checkpoint['target_network_state_dict'])
-    agent.epsilon = checkpoint['epsilon']
+    agent.critic_1_network.load_state_dict(checkpoint['critic_1_network_state_dict'])
+    agent.critic_2_network.load_state_dict(checkpoint['critic_2_network_state_dict'])
     episode_start_number = checkpoint['episode_idx']
 
 
@@ -113,7 +118,7 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
         for _ in range(REPEAT_ACTION_NUMBER):
             next_state, reward, terminated, truncated, info = env.step(action)
             episode_step_counter += 1
-            repeat_action_reward += reward
+            repeat_action_reward += float(reward)
 
             next_grayscaled_state = prep.convert_to_grayscale(state=next_state, slices=STATE_SLICES)
             states_queue.append(next_grayscaled_state)
@@ -128,7 +133,7 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
 
         sum_episode_reward += repeat_action_reward
         
-        experience = Replay(agent_state, action, repeat_action_reward, next_agent_state, terminated or truncated)
+        experience = ReplayContinuous(agent_state, action, repeat_action_reward, next_agent_state, terminated or truncated)
         replay_buffer.append(experience)
         
         if len(replay_buffer) >= BATCH_SIZE and timestep % 4 == 0:
