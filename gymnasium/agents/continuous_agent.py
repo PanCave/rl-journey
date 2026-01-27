@@ -14,7 +14,6 @@ class SACAgent:
     def __init__(
         self,
         env: gym.Env,
-        num_target_update_steps: int,
         policy_network: nn.Module,
         critic_1_network: nn.Module | None,
         critic_2_network: nn.Module | None,
@@ -22,16 +21,20 @@ class SACAgent:
         gamma: float,
         alpha: float,
         tau: float,
-        optimizer: torch.optim.Optimizer,
+        critic_optimizer: torch.optim.Optimizer,
+        policy_optimizer: torch.optim.Optimizer,
         device: torch.device | str
     ) -> None:
         self.env = env
-        self.num_target_update_steps = num_target_update_steps
         self.policy_network = policy_network
         self.critic_1_network = critic_1_network
         self.target_1_network = deepcopy(critic_1_network)
+        if self.target_1_network is not None:
+            self.target_1_network.to(device=self.device)
         self.critic_2_network = critic_2_network
         self.target_2_network = deepcopy(critic_2_network)
+        if self.target_2_network is not None:
+            self.target_2_network.to(device=self.device)
         self.device = device
         self.target_net_update_step_counter = 0
         
@@ -40,7 +43,8 @@ class SACAgent:
         self.alpha = alpha
         self.tau = tau
 
-        self.optimizer = optimizer
+        self.critic_optimizer = critic_optimizer
+        self.policy_optimizer = policy_optimizer
         self.policy_network.to(device=self.device)
         #self.target_network.to(device=self.device)
 
@@ -58,9 +62,10 @@ class SACAgent:
             mu = mu_sigma_values.numpy()[:self.action_dim]
             
         if inference_only:
-            return mu
+            return np.tanh(mu)
         else:
-            sigma = mu_sigma_values.numpy()[self.action_dim:]
+            log_sigma = mu_sigma_values.numpy()[self.action_dim:]
+            sigma = np.exp(log_sigma)
             #action_dim_tensor = torch.tensor(self.action_dim, device=self.device)
             e = np.random.normal(self.action_dim)
             u = mu + sigma * e
@@ -74,7 +79,7 @@ class SACAgent:
             target_param.data.copy_(self.tau * source_param.data + (1.0 - self.tau) * target_param.data)
         
     
-    def train(self, replay_batch: List[ReplayContinuous]) -> int:
+    def train(self, replay_batch: List[ReplayContinuous]) -> dict[str, float]:
         assert isinstance(self.critic_1_network, nn.Module)
         assert isinstance(self.critic_2_network, nn.Module)
         assert isinstance(self.target_1_network, nn.Module)
@@ -91,18 +96,13 @@ class SACAgent:
         # log(pi_theta(a'*|s')): entropy term
 
         # Calculate a'*
-        states = np.array([replay.state for replay in replay_batch])
-        states_tensor = torch.tensor(states, device=self.device)
-        actions = np.array([replay.action for replay in replay_batch])
-        actions_tensor = torch.tensor(actions, device=self.device)
-        rewards = np.array([replay.reward for replay in replay_batch])
-        rewards_tensor = torch.tensor(rewards, device=self.device)
-        next_states = np.array([replay.next_state for replay in replay_batch])
-        next_states_tensor = torch.tensor(next_states, device=self.device)
-        done = np.array([replay.done for replay in replay_batch])
-        done_tensor = torch.tensor(done, device=self.device)
-        q_values_1 = self.critic_1_network.forward(states_tensor, actions_tensor)
-        q_values_2 = self.critic_2_network.forward(states_tensor, actions_tensor)
+        states = torch.tensor([replay.state for replay in replay_batch], device=self.device)
+        actions = torch.tensor([replay.action for replay in replay_batch], device=self.device)
+        rewards = torch.tensor([replay.reward for replay in replay_batch], device=self.device)
+        next_states = torch.tensor([replay.next_state for replay in replay_batch], device=self.device)
+        done = torch.tensor([replay.done for replay in replay_batch], device=self.device)
+        q_values_1 = self.critic_1_network.forward(states, actions)
+        q_values_2 = self.critic_2_network.forward(states, actions)
 
         with torch.no_grad():
             ## nn should output mu and log_sigma
@@ -118,25 +118,58 @@ class SACAgent:
             next_actions_sampled = torch.tanh(m_sample)
 
             # Calculate min_{i=1,2}  Q_{phi_targ, i}(s', a'*)
-            target_1_q_values: torch.Tensor = self.target_1_network.forward(next_states_tensor, next_actions_sampled)
-            target_2_q_values: torch.Tensor = self.target_2_network.forward(next_states_tensor, next_actions_sampled)
+            target_1_q_values: torch.Tensor = self.target_1_network.forward(next_states, next_actions_sampled)
+            target_2_q_values: torch.Tensor = self.target_2_network.forward(next_states, next_actions_sampled)
             minimun_q_values = torch.minimum(target_1_q_values, target_2_q_values)
 
             # Calculate log(pi_theta(a'*|s'))
             logp_basic = pi_theta.log_prob(m_sample).sum(dim=-1, keepdim=True) - torch.log(1 - next_actions_sampled.pow(2) + 1e-6).sum(dim=-1, keepdim=True)
 
             # y(r, s', d)
-            y_values = rewards_tensor + (1 - done_tensor) * self.gamma * (minimun_q_values - self.alpha * logp_basic)
+            y_values = rewards + (1 - done) * self.gamma * (minimun_q_values - self.alpha * logp_basic)
 
         mse_value_loss_1 = F.huber_loss(q_values_1, y_values, delta=1)
         mse_value_loss_2 = F.huber_loss(q_values_2, y_values, delta=1)
-        self.optimizer.zero_grad()
+        self.critic_optimizer.zero_grad()
         mse_value_loss_1.backward()
         mse_value_loss_2.backward()
-        self.optimizer.step()
+        self.critic_optimizer.step()
+
+        # Policy loss function:
+        # a* = pi_theta(.|s): predicted action for s
+        # log(pi_theta(a*|s)): entropy term
+        actions_policy: torch.Tensor = self.policy_network.forward(states)
+        mu = actions_policy[:, :self.action_dim]
+        log_sigma = actions_policy[:, self.action_dim:]
+        log_sigma = torch.clamp(log_sigma, min=-20, max=2)
+        sigma = torch.exp(log_sigma)
+        pi_theta = torch.distributions.Normal(mu, sigma)
+        # e = torch.randn((len(replay_batch), self.action_dim))
+        # u = mu + sigma * e
+        m_sample = pi_theta.rsample() # shape: (batch_size, action_dim)
+        actions_sampled = torch.tanh(m_sample)
+
+        actions_sampled_detached = actions_sampled.detach()
+
+        # Calculate min_{i=1,2}  Q_{phi_targ, i}(s, a*)
+        target_1_q_values: torch.Tensor = self.target_1_network.forward(states, actions_sampled_detached)
+        target_2_q_values: torch.Tensor = self.target_2_network.forward(states, actions_sampled_detached)
+        minimun_q_values = torch.minimum(target_1_q_values, target_2_q_values)
+
+        # Calculate log(pi_theta(a*|s))
+        logp_basic = pi_theta.log_prob(m_sample).sum(dim=-1, keepdim=True) - torch.log(1 - actions_sampled.pow(2) + 1e-6).sum(dim=-1, keepdim=True)
+
+        policy_loss = F.huber_loss(minimun_q_values, self.alpha * logp_basic, delta=1)
+        self.policy_optimizer.zero_grad()
+        policy_loss.backward()
+        self.policy_optimizer.step()
 
         # soft-update of target networks
         self.soft_update(self.target_1_network, self.critic_1_network)
         self.soft_update(self.target_2_network, self.critic_2_network)
 
-        return 0
+        return {
+            'critic_loss_1': float(mse_value_loss_1.detach().item()),
+            'critic_loss_2': float(mse_value_loss_2.detach().item()),
+            'policy_loss': float(policy_loss.detach().item())
+        }

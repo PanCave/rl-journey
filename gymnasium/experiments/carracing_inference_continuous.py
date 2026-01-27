@@ -50,7 +50,7 @@ agent = SACAgent(
     action_dim=output_shape,
     alpha=1,
     tau=0.95,
-    optimizer=optimizer,
+    critic_optimizer=optimizer,
     device=device,
 )
 

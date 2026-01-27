@@ -23,7 +23,7 @@ def save_sac_checkpoint(
         'critic_2_network_state_dict': agent.critic_2_network.state_dict(),
         'target_1_network_state_dict': agent.target_1_network.state_dict(),
         'target_2_network_state_dict': agent.target_2_network.state_dict(),
-        'optimizer_state_dict': agent.optimizer.state_dict()
+        'optimizer_state_dict': agent.critic_optimizer.state_dict()
     }
     torch.save(save_dict, save_checkpoint_path_str)
 
