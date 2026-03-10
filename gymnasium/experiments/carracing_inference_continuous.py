@@ -4,6 +4,7 @@ from collections import deque
 
 import gymnasium as gym
 import torch
+import numpy as np
 
 # Add the parent directory to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -43,14 +44,16 @@ sac_policy = ContinuousCarRacingPolicy(input_shape=input_shape, action_dim=outpu
 optimizer = torch.optim.Adam(sac_policy.parameters())
 agent = SACAgent(
     env=env,
-    num_target_update_steps=2000,
     policy_network=sac_policy,
     critic_1_network=None,
     critic_2_network=None,
     action_dim=output_shape,
     alpha=1,
     tau=0.95,
-    critic_optimizer=optimizer,
+    gamma=0.995,
+    critic_1_optimizer=None,
+    critic_2_optimizer=None,
+    policy_optimizer=None,
     device=device,
 )
 
@@ -70,7 +73,7 @@ for episode_idx in range(20):
         grayscaled_state = prep.convert_to_grayscale(state=state, slices=STATE_SLICES)
         states_queue.append(grayscaled_state)
         agent_state = prep.deque_to_tensor(states_queue)
-        action = agent.select_action(agent_state, inference_only=True)
+        action = np.array([0, 1, 0.5])#agent.select_action(agent_state, inference_only=True)
 
         state, reward, terminated, truncated, info = env.step(action=action)
 

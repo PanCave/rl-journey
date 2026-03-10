@@ -109,7 +109,7 @@ class ContinuousCarRacingCritic(nn.Module):
         
         # Fully connected layers
         fc1_output = self.fc_layers_1(flattened_conv_output)
-        stacked_fc2_input = torch.vstack([fc1_output, action])
+        stacked_fc2_input = torch.hstack([fc1_output, action])
         fc2_output  = self.fc_layers_2(stacked_fc2_input)
 
         return fc2_output

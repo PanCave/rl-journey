@@ -60,20 +60,24 @@ number_of_frames = 4
 input_shape = (state_width, state_height, number_of_frames)
 output_shape = 3
 sac_policy = ContinuousCarRacingPolicy(input_shape=input_shape, action_dim=output_shape)
-critic_1_network = ContinuousCarRacingCritic(input_shape=input_shape, action_dim=1)
-critic_2_network = ContinuousCarRacingCritic(input_shape=input_shape, action_dim=1)
+critic_1_network = ContinuousCarRacingCritic(input_shape=input_shape, action_dim=3)
+critic_2_network = ContinuousCarRacingCritic(input_shape=input_shape, action_dim=3)
 
-optimizer = Adam(sac_policy.parameters(), lr=0.0001)
+critic_1_optimizer = Adam(critic_1_network.parameters(), lr=0.0001)
+critic_2_optimizer = Adam(critic_2_network.parameters(), lr=0.0001)
+policy_optimizer = Adam(sac_policy.parameters(), lr=0.0001)
 agent = SACAgent(
     env=env,
-    num_target_update_steps=2000,
     policy_network=sac_policy,
     critic_1_network=critic_1_network,
     critic_2_network=critic_2_network,
     action_dim=output_shape,
     alpha=1,
     tau=0.95,
-    critic_optimizer=optimizer,
+    gamma=0.995,
+    critic_1_optimizer=critic_1_optimizer,
+    critic_2_optimizer=critic_2_optimizer,
+    policy_optimizer=policy_optimizer,
     device=device,
 )
 empty_state = torch.zeros(state_width, state_height)
@@ -97,7 +101,9 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
     state, info = env.reset()
 
     sum_episode_reward = 0
-    sum_episode_loss = 0
+    sum_policy_episode_loss = 0
+    sum_critic_1_episode_loss = 0
+    sum_critic_2_episode_loss = 0
     episode_step_counter = 0
 
     print(f'Episode {episode_idx}')
@@ -136,10 +142,12 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
         experience = ReplayContinuous(agent_state, action, repeat_action_reward, next_agent_state, terminated or truncated)
         replay_buffer.append(experience)
         
-        if len(replay_buffer) >= BATCH_SIZE and timestep % 4 == 0:
-            batch = bts.sample_with_high_rewards_prioritized(replay_buffer=replay_buffer, number_of_samples=BATCH_SIZE)
+        if len(replay_buffer) >= BATCH_SIZE and timestep % 1 == 0:
+            batch = bts.sample_continuous_with_high_rewards_prioritized(replay_buffer=replay_buffer, number_of_samples=BATCH_SIZE)
             loss = agent.train(batch)
-            sum_episode_loss += loss
+            sum_policy_episode_loss += loss['policy_loss']
+            sum_critic_1_episode_loss += loss['critic_1_loss']
+            sum_critic_2_episode_loss += loss['critic_2_loss']
         
         if terminated or truncated:
             break
@@ -149,7 +157,9 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
     mean_episode_reward = sum_episode_reward / episode_step_counter
     writer.add_scalar("Summed Reward per Episode", sum_episode_reward, episode_idx)
     writer.add_scalar("Mean Reward per Episode", mean_episode_reward, episode_idx)
-    writer.add_scalar("Summed Loss per Episode", sum_episode_loss, episode_idx)
+    writer.add_scalar("Summed Policy Loss per Episode", sum_policy_episode_loss, episode_idx)
+    writer.add_scalar("Summed Critic 1 Loss per Episode", sum_critic_1_episode_loss, episode_idx)
+    writer.add_scalar("Summed Critic 2 Loss per Episode", sum_critic_2_episode_loss, episode_idx)
     writer.add_scalar("Episode Step Counter", episode_step_counter, episode_idx)
 
     if episode_idx > 0 and episode_idx % EPISODE_SAVE_RATE == 0:
