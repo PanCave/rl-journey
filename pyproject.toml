@@ -7,5 +7,6 @@ requires-python = ">=3.12"
 dependencies = [
     "gymnasium[box2d]>=1.2.2",
     "swig>=4.4.0",
+    "tensorboard>=2.20.0",
     "torchvision>=0.24.1",
 ]
