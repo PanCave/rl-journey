@@ -115,7 +115,7 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
         agent_state = prep.deque_to_tensor(states_queue)
         action = agent.select_action(agent_state)
 
-        repeat_action_reward = 0
+        repeat_action_reward: float = 0.0
         for _ in range(REPEAT_ACTION_NUMBER):
             next_state, reward, terminated, truncated, info = env.step(1)
             episode_step_counter += 1
@@ -146,7 +146,7 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
 
         sum_episode_reward += repeat_action_reward
         
-        experience = Replay(agent_state, action, repeat_action_reward, next_agent_state, terminated or truncated)
+        experience = Replay(agent_state, action, repeat_action_reward, next_agent_state, terminated)
         replay_buffer.append(experience)
         
         if len(replay_buffer) >= BATCH_SIZE and timestep % 4 == 0:

@@ -134,9 +134,9 @@ class MichaelSchumacher:
         """Update epsilon value with decay"""
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
     
-    def remember(self, state, action, reward, next_state, done):
+    def remember(self, state, action, reward, next_state, terminated):
         """Store experience in replay buffer"""
-        self.replay_buffer.append((state, action, reward, next_state, done))
+        self.replay_buffer.append((state, action, reward, next_state, terminated))
     
     def train(self):
         """Train the network using experiences from the replay buffer"""
@@ -145,14 +145,14 @@ class MichaelSchumacher:
         
         # Sample random batch from replay buffer
         batch = random.sample(self.replay_buffer, self.batch_size)
-        states, actions, rewards, next_states, dones = zip(*batch)
+        states, actions, rewards, next_states, terminateds = zip(*batch)
         
         # Convert to tensors
         states = torch.tensor(np.array(states), dtype=torch.float32).to(self.device)
         actions = torch.tensor(np.array(actions), dtype=torch.float32).to(self.device)
         rewards = torch.tensor(np.array(rewards), dtype=torch.float32).to(self.device)
         next_states = torch.tensor(np.array(next_states), dtype=torch.float32).to(self.device)
-        dones = torch.tensor(np.array(dones), dtype=torch.float32).to(self.device)
+        terminateds = torch.tensor(np.array(terminateds), dtype=torch.float32).to(self.device)
         
         # Compute current Q values
         current_q = self.q_network(states)
@@ -165,7 +165,7 @@ class MichaelSchumacher:
         with torch.no_grad():
             next_q = self.target_network(next_states)
             max_next_q = torch.max(next_q, dim=1)[0]
-            target_q = rewards + (1 - dones) * self.discount_factor * max_next_q
+            target_q = rewards + (1 - terminateds) * self.discount_factor * max_next_q
         
         # Compute loss (MSE between current Q and target Q for the taken actions)
         loss = F.mse_loss(torch.sum(current_q * F.one_hot(action_indices, self.action_dim), dim=1), target_q)
@@ -185,14 +185,14 @@ class MichaelSchumacher:
         for episode in range(num_episodes):
             state, _ = self.env.reset()
             episode_reward = 0
-            done = False
+            terminated = False
             
-            while not done:
+            while not terminated:
                 action = self.select_action(state)
                 next_state, reward, terminated, truncated, _ = self.env.step(action)
-                done = terminated or truncated
+                terminated = terminated or truncated
                 
-                self.remember(state, action, reward, next_state, done)
+                self.remember(state, action, reward, next_state, terminated)
                 self.train()
                 
                 state = next_state

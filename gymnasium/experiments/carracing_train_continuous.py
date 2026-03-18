@@ -8,6 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from collections import deque
 import torch
+import numpy as np
 
 from agents.continuous_agent import SACAgent
 from networks.continuous_car_racing_cnn import ContinuousCarRacingPolicy, ContinuousCarRacingCritic
@@ -71,14 +72,15 @@ agent = SACAgent(
     policy_network=sac_policy,
     critic_1_network=critic_1_network,
     critic_2_network=critic_2_network,
-    action_dim=output_shape,
-    alpha=1,
+    alpha=0.2,
     tau=0.95,
     gamma=0.995,
     critic_1_optimizer=critic_1_optimizer,
     critic_2_optimizer=critic_2_optimizer,
     policy_optimizer=policy_optimizer,
     device=device,
+    action_range_mins=np.array([-1, 0, 0]),
+    action_range_maxs=np.array([1, 1, 1])
 )
 empty_state = torch.zeros(state_width, state_height)
 replay_buffer = deque(maxlen=MAX_REPLAY_BUFFER_LENGTH)
@@ -139,7 +141,7 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
 
         sum_episode_reward += repeat_action_reward
         
-        experience = ReplayContinuous(agent_state, action, repeat_action_reward, next_agent_state, terminated or truncated)
+        experience = ReplayContinuous(agent_state, action, repeat_action_reward, next_agent_state, terminated)
         replay_buffer.append(experience)
         
         if len(replay_buffer) >= BATCH_SIZE and timestep % 1 == 0:

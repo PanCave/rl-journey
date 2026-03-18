@@ -47,7 +47,6 @@ agent = SACAgent(
     policy_network=sac_policy,
     critic_1_network=None,
     critic_2_network=None,
-    action_dim=output_shape,
     alpha=1,
     tau=0.95,
     gamma=0.995,
@@ -55,6 +54,8 @@ agent = SACAgent(
     critic_2_optimizer=None,
     policy_optimizer=None,
     device=device,
+    action_range_mins=np.array([-1, 0, 0]),
+    action_range_maxs=np.array([1, 1, 1])
 )
 
 empty_state = torch.zeros(state_width, state_height)
@@ -73,7 +74,7 @@ for episode_idx in range(20):
         grayscaled_state = prep.convert_to_grayscale(state=state, slices=STATE_SLICES)
         states_queue.append(grayscaled_state)
         agent_state = prep.deque_to_tensor(states_queue)
-        action = np.array([0, 1, 0.5])#agent.select_action(agent_state, inference_only=True)
+        action = np.array([0, 1, 0])#agent.select_action(agent_state, inference_only=True)
 
         state, reward, terminated, truncated, info = env.step(action=action)
 

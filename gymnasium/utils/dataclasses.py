@@ -10,7 +10,7 @@ class Replay:
     action: int
     reward: float
     next_state: torch.Tensor
-    done: bool
+    terminated: bool
 
 @dataclass
 class ReplayContinuous:
@@ -18,4 +18,4 @@ class ReplayContinuous:
     action: NDArray
     reward: float
     next_state: torch.Tensor
-    done: bool
+    terminated: bool

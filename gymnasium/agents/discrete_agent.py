@@ -87,14 +87,14 @@ class DiscreteAgent:
         next_states_tensor = torch.tensor(next_states, device=self.device)
 
         with torch.no_grad():
-            done_mask = np.array([replay.done for replay in replay_batch])
-            done_mask_tensor = torch.tensor(done_mask, device=self.device, dtype=torch.bool)
+            terminated_mask = np.array([replay.terminated for replay in replay_batch])
+            terminated_mask_tensor = torch.tensor(terminated_mask, device=self.device, dtype=torch.bool)
             next_q_values = self.target_network.forward(next_states_tensor)
 
         max_next_q_values = torch.max(
             input = next_q_values,
             dim = -1).values
-        max_next_q_values[done_mask_tensor] = 0.0
+        max_next_q_values[terminated_mask_tensor] = 0.0
         rewards = torch.tensor([replay.reward for replay in replay_batch], device=self.device)
 
         # bellman equation
