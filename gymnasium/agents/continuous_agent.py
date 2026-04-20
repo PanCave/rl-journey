@@ -23,9 +23,11 @@ class SACAgent:
         critic_1_optimizer: torch.optim.Optimizer | None,
         critic_2_optimizer: torch.optim.Optimizer | None,
         policy_optimizer: torch.optim.Optimizer | None,
-        device: torch.device | str,
+        device: torch.device,
         action_range_mins: NDArray,
-        action_range_maxs: NDArray
+        action_range_maxs: NDArray,
+        alpha_optimizer: torch.optim.Optimizer | None = None,
+        target_entropy: float | None = None
     ) -> None:
         assert len(action_range_mins) == len(action_range_maxs)
         self.action_dim = len(action_range_mins)
@@ -51,8 +53,11 @@ class SACAgent:
                 p.requires_grad_(False)
         self.target_net_update_step_counter = 0
         self.gamma = gamma
-        self.alpha = alpha
-        self.tau = tau        
+        self.tau = tau
+
+        self.log_alpha = torch.tensor(np.log(alpha), dtype=torch.float32, requires_grad=True, device=device)
+        self.alpha_optimizer = alpha_optimizer
+        self.target_entropy = target_entropy if target_entropy is not None else -float(self.action_dim)
 
         self.critic_1_optimizer = critic_1_optimizer
         self.critic_2_optimizer = critic_2_optimizer
@@ -80,7 +85,8 @@ class SACAgent:
             mu = mu_sigma_values[:self.action_dim]
             
         if inference_only:
-            return self._map_to_target_range(np.tanh(mu))
+            action = np.tanh(mu)
+            return self._map_to_target_range(action)
         else:
             log_sigma = mu_sigma_values[self.action_dim:]
             log_sigma = np.clip(log_sigma, -20, 2)
@@ -128,6 +134,7 @@ class SACAgent:
         rewards = torch.tensor([replay.reward for replay in replay_batch], device=self.device, dtype=torch.float32)
         next_states = torch.stack([replay.next_state for replay in replay_batch]).to(device=self.device)
         terminated = torch.tensor([replay.terminated for replay in replay_batch], device=self.device, dtype=torch.float32)
+
         # Ensuring correct shapes
         rewards = rewards.unsqueeze(-1)
         terminated = terminated.unsqueeze(-1).float()
@@ -151,14 +158,22 @@ class SACAgent:
 
             # Calculate min_{i=1,2}  Q_{phi_targ, i}(s', a'*)
             target_1_q_values: torch.Tensor = self.target_1_network(next_states, next_actions_sampled)
+            target_1_q_values = target_1_q_values.view(-1, 1)
             target_2_q_values: torch.Tensor = self.target_2_network(next_states, next_actions_sampled)
-            minimun_q_values = torch.minimum(target_1_q_values, target_2_q_values)
+            target_2_q_values = target_2_q_values.view(-1, 1)
+            minimum_q_values = torch.minimum(target_1_q_values, target_2_q_values)
 
             # Calculate log(pi_theta(a'*|s'))
             logp_basic = pi_theta.log_prob(m_sample).sum(dim=-1, keepdim=True) - torch.log(1 - next_actions_sampled.pow(2) + 1e-6).sum(dim=-1, keepdim=True)
 
             # y(r, s', d)
-            y_values = rewards + (1 - terminated) * self.gamma * (minimun_q_values - self.alpha * logp_basic)
+            alpha = self.log_alpha.exp()
+            y_values = rewards + (1 - terminated) * self.gamma * (minimum_q_values - alpha * logp_basic)
+        
+        assert rewards.ndim == 2 and rewards.shape[1] == 1
+        assert terminated.ndim == 2 and terminated.shape[1] == 1
+        assert q_values_1.shape == q_values_2.shape == rewards.shape == terminated.shape
+        assert logp_basic.shape == rewards.shape
 
         huber_value_loss_1 = F.huber_loss(q_values_1, y_values, delta=1)
         huber_value_loss_2 = F.huber_loss(q_values_2, y_values, delta=1)
@@ -183,26 +198,38 @@ class SACAgent:
         m_sample = pi_theta.rsample() # shape: (batch_size, action_dim)
         actions_sampled = torch.tanh(m_sample)
 
-        # Calculate min_{i=1,2}  Q_{phi_targ, i}(s, a*)
-        with torch.no_grad():
-            critic_1_q_values: torch.Tensor = self.critic_1_network(states, actions_sampled)
-            critic_2_q_values: torch.Tensor = self.critic_2_network(states, actions_sampled)
-            minimun_q_values = torch.minimum(critic_1_q_values, critic_2_q_values)
+        # Calculate min_{i=1,2}  Q_{phi, i}(s, a*)
+        critic_1_q_values: torch.Tensor = self.critic_1_network(states, actions_sampled)
+        critic_2_q_values: torch.Tensor = self.critic_2_network(states, actions_sampled)
+        minimum_q_values = torch.minimum(critic_1_q_values, critic_2_q_values)
 
         # Calculate log(pi_theta(a*|s))
         logp_basic = pi_theta.log_prob(m_sample).sum(dim=-1, keepdim=True) - torch.log(1 - actions_sampled.pow(2) + 1e-6).sum(dim=-1, keepdim=True)
 
-        policy_loss = (self.alpha * logp_basic - minimun_q_values).mean()
+        alpha = self.log_alpha.exp().detach()
+        policy_loss = (alpha * logp_basic - minimum_q_values).mean()
         self.policy_optimizer.zero_grad()
         policy_loss.backward()
         self.policy_optimizer.step()
+
+        # Alpha tuning
+        alpha_loss = None
+        if self.alpha_optimizer is not None:
+            alpha_loss = -(self.log_alpha.exp() * (logp_basic.detach() + self.target_entropy)).mean()
+            self.alpha_optimizer.zero_grad()
+            alpha_loss.backward()
+            self.alpha_optimizer.step()
 
         # soft-update of target networks
         self.soft_update(self.target_1_network, self.critic_1_network)
         self.soft_update(self.target_2_network, self.critic_2_network)
 
-        return {
+        metrics = {
             'critic_1_loss': float(huber_value_loss_1.detach().item()),
             'critic_2_loss': float(huber_value_loss_2.detach().item()),
-            'policy_loss': float(policy_loss.detach().item())
+            'policy_loss': float(policy_loss.detach().item()),
+            'alpha': float(self.log_alpha.exp().detach().item())
         }
+        if alpha_loss is not None:
+            metrics['alpha_loss'] = float(alpha_loss.detach().item())
+        return metrics
