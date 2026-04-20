@@ -27,6 +27,7 @@ def save_sac_checkpoint(
     assert isinstance(agent.critic_2_optimizer, torch.optim.Optimizer)
     
     save_dict = {
+        'episode_idx': episode_idx,
         'policy_network_state_dict': agent.policy_network.state_dict(),
         'policy_optimizer_state_dict': agent.policy_optimizer.state_dict(),
         'critic_1_network_state_dict': agent.critic_1_network.state_dict(),
@@ -52,6 +53,7 @@ def save_dqn_checkpoint(
     directory.mkdir(exist_ok=True, parents=True)
     
     save_dict = {
+        'episode_idx': episode_idx,
         'policy_network_state_dict': agent.policy_network.state_dict(),
         'target_network_state_dict': agent.target_network.state_dict(),
         'optimizer_state_dict': agent.optimizer.state_dict()

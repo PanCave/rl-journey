@@ -31,7 +31,7 @@ if torch.cuda.is_available():
     device = torch.device('cuda')
 else:
     #device = 'cpu'
-    device = torch.device('cpu')
+    device = 'cpu'
 
 state_width = 84
 state_height = 84
@@ -62,6 +62,7 @@ states_queue = deque(maxlen=number_of_frames, iterable=[empty_state] * 3)
 if checkpoint:
     print("Loading checkpoint...")
     agent.policy_network.load_state_dict(checkpoint['policy_network_state_dict'])
+    print(f"Model restored at {CHECKPOINT_PATH}")
 else:
     raise ValueError("Checkpoint must not be None")
 

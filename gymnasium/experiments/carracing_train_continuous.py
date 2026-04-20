@@ -8,7 +8,6 @@ from clearml import Task
 
 from collections import deque
 import torch
-import torch.nn as nn
 import numpy as np
 
 from agents.continuous_agent import SACAgent
@@ -27,13 +26,14 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 BATCH_SIZE = 256
 REPLAY_BUFFER_RESET_STEPS = 1000
+TRAIN_EVERY_STEPS = 4
 
 if torch.cuda.is_available():
-    device = torch.device('cuda')
-# elif torch.mps.is_available():
-#     device = 'mps'  # SCHMUTZ
+    device = 'cuda'
+elif torch.mps.is_available():
+    device = 'mps'
 else:
-    device = torch.device('cpu')
+    device = 'cpu'
 
 print(device)
 # 0: steering, -1 is full left, +1 is full right
@@ -87,8 +87,8 @@ agent = SACAgent(
     policy_network=policy_network,
     critic_1_network=critic_1_network,
     critic_2_network=critic_2_network,
-    alpha=0.5,
-    tau=0.05,
+    alpha=0.2,
+    tau=0.005,
     gamma=0.995,
     critic_1_optimizer=critic_1_optimizer,
     critic_2_optimizer=critic_2_optimizer,
@@ -105,28 +105,30 @@ global_step_counter = 0
 episode_start_number = 0
 
 if checkpoint is not None:
-    assert isinstance(agent.critic_1_network, nn.Module)
-    assert isinstance(agent.critic_2_network, nn.Module)
-    assert isinstance(agent.target_1_network, nn.Module)
-    assert isinstance(agent.target_2_network, nn.Module)
+    assert isinstance(agent.critic_1_network, ContinuousCarRacingCritic)
+    assert isinstance(agent.critic_2_network, ContinuousCarRacingCritic)
+    assert isinstance(agent.target_1_network, ContinuousCarRacingCritic)
+    assert isinstance(agent.target_2_network, ContinuousCarRacingCritic)
     assert isinstance(agent.policy_optimizer, torch.optim.Optimizer)
     assert isinstance(agent.critic_1_optimizer, torch.optim.Optimizer)
     assert isinstance(agent.critic_2_optimizer, torch.optim.Optimizer)
-    
+
     agent.policy_network.load_state_dict(checkpoint['policy_network_state_dict'])
     agent.policy_optimizer.load_state_dict(checkpoint['policy_optimizer_state_dict'])
     agent.critic_1_network.load_state_dict(checkpoint['critic_1_network_state_dict'])
     agent.critic_1_optimizer.load_state_dict(checkpoint['critic_1_optimizer_state_dict'])
     agent.critic_2_network.load_state_dict(checkpoint['critic_2_network_state_dict'])
-    agent.critic_2_optimizer.load_state_dict(checkpoint['critic_2_optimizer_state_dict'])
-    agent.target_1_network.load_state_dict(checkpoint['target_1_network_state_dict'])
-    agent.target_2_network.load_state_dict(checkpoint['target_2_network_state_dict'])
-    if 'log_alpha' in checkpoint:
-        with torch.no_grad():
-            agent.log_alpha.copy_(checkpoint['log_alpha'].to(device))
-    if 'alpha_optimizer_state_dict' in checkpoint and agent.alpha_optimizer is not None:
-        agent.alpha_optimizer.load_state_dict(checkpoint['alpha_optimizer_state_dict'])
-    episode_start_number = checkpoint['episode_idx']
+    if 'target_1_network_state_dict' in checkpoint:
+        agent.target_1_network.load_state_dict(checkpoint['target_1_network_state_dict'])
+    else:
+        agent.target_1_network.load_state_dict(agent.critic_1_network.state_dict())
+
+    if 'target_2_network_state_dict' in checkpoint:
+        agent.target_2_network.load_state_dict(checkpoint['target_2_network_state_dict'])
+    else:
+        agent.target_2_network.load_state_dict(agent.critic_2_network.state_dict())
+
+    episode_start_number = checkpoint.get('episode_idx', 0)
 
 task.connect({
     "BATCH_SIZE": BATCH_SIZE,
@@ -152,7 +154,7 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
     
     state, info = env.reset()
 
-    sum_episode_reward = 0
+    sum_episode_reward = 0.0
     sum_policy_episode_loss = 0
     sum_critic_1_episode_loss = 0
     sum_critic_2_episode_loss = 0
@@ -174,7 +176,7 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
         agent_state = prep.deque_to_tensor(states_queue)
         action = agent.select_action(agent_state)
 
-        repeat_action_reward = 0
+        repeat_action_reward: float = 0.0
         for _ in range(REPEAT_ACTION_NUMBER):
             next_state, reward, terminated, truncated, info = env.step(action)
             episode_step_counter += 1
@@ -196,7 +198,7 @@ for episode_idx in range(episode_start_number, NUM_EPISODES):
         experience = ReplayContinuous(agent_state, action, repeat_action_reward, next_agent_state, terminated)
         replay_buffer.append(experience)
         
-        if len(replay_buffer) >= BATCH_SIZE and timestep % 1 == 0:
+        if len(replay_buffer) >= BATCH_SIZE and global_step_counter % TRAIN_EVERY_STEPS == 0:
             batch = bts.sample_continuous(replay_buffer=replay_buffer, number_of_samples=BATCH_SIZE)
             loss = agent.train(batch)
             train_steps += 1

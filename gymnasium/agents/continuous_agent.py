@@ -35,6 +35,8 @@ class SACAgent:
         self.action_range_mins = action_range_mins
         action_range_diffs = action_range_maxs - action_range_mins
         self.scale_factor = 0.5 * action_range_diffs # 0.5 because of tanh
+        self.action_range_mins_tensor = torch.tensor(action_range_mins, dtype=torch.float32, device=device)
+        self.scale_factor_tensor = torch.tensor(self.scale_factor, dtype=torch.float32, device=device)
 
         self.env = env
         self.policy_network = policy_network
@@ -70,6 +72,9 @@ class SACAgent:
 
     def _map_to_target_range(self, values: NDArray) -> NDArray:
         return self.scale_factor * (values + 1) + self.action_range_mins
+
+    def _map_tensor_to_target_range(self, values: torch.Tensor) -> torch.Tensor:
+        return self.scale_factor_tensor * (values + 1) + self.action_range_mins_tensor
 
     def select_action(
         self,
@@ -130,11 +135,13 @@ class SACAgent:
 
         # Calculate a'*
         states = torch.stack([replay.state for replay in replay_batch]).to(device=self.device)
-        actions = torch.tensor([replay.action for replay in replay_batch], device=self.device, dtype=torch.float32)
-        rewards = torch.tensor([replay.reward for replay in replay_batch], device=self.device, dtype=torch.float32)
+        actions_np = np.asarray([replay.action for replay in replay_batch], dtype=np.float32)
+        rewards_np = np.asarray([replay.reward for replay in replay_batch], dtype=np.float32)
         next_states = torch.stack([replay.next_state for replay in replay_batch]).to(device=self.device)
-        terminated = torch.tensor([replay.terminated for replay in replay_batch], device=self.device, dtype=torch.float32)
-
+        terminated_np = np.asarray([replay.terminated for replay in replay_batch], dtype=np.float32)
+        actions = torch.as_tensor(actions_np, device=self.device)
+        rewards = torch.as_tensor(rewards_np, device=self.device)
+        terminated = torch.as_tensor(terminated_np, device=self.device)
         # Ensuring correct shapes
         rewards = rewards.unsqueeze(-1)
         terminated = terminated.unsqueeze(-1).float()
@@ -155,13 +162,12 @@ class SACAgent:
             # u = mu + sigma * e
             m_sample = pi_theta.rsample() # shape: (batch_size, action_dim)
             next_actions_sampled = torch.tanh(m_sample)
+            next_actions_mapped = self._map_tensor_to_target_range(next_actions_sampled)
 
             # Calculate min_{i=1,2}  Q_{phi_targ, i}(s', a'*)
-            target_1_q_values: torch.Tensor = self.target_1_network(next_states, next_actions_sampled)
-            target_1_q_values = target_1_q_values.view(-1, 1)
-            target_2_q_values: torch.Tensor = self.target_2_network(next_states, next_actions_sampled)
-            target_2_q_values = target_2_q_values.view(-1, 1)
-            minimum_q_values = torch.minimum(target_1_q_values, target_2_q_values)
+            target_1_q_values: torch.Tensor = self.target_1_network(next_states, next_actions_mapped)
+            target_2_q_values: torch.Tensor = self.target_2_network(next_states, next_actions_mapped)
+            minimun_q_values = torch.minimum(target_1_q_values, target_2_q_values)
 
             # Calculate log(pi_theta(a'*|s'))
             logp_basic = pi_theta.log_prob(m_sample).sum(dim=-1, keepdim=True) - torch.log(1 - next_actions_sampled.pow(2) + 1e-6).sum(dim=-1, keepdim=True)
@@ -197,11 +203,16 @@ class SACAgent:
         # u = mu + sigma * e
         m_sample = pi_theta.rsample() # shape: (batch_size, action_dim)
         actions_sampled = torch.tanh(m_sample)
+        actions_mapped = self._map_tensor_to_target_range(actions_sampled)
 
-        # Calculate min_{i=1,2}  Q_{phi, i}(s, a*)
-        critic_1_q_values: torch.Tensor = self.critic_1_network(states, actions_sampled)
-        critic_2_q_values: torch.Tensor = self.critic_2_network(states, actions_sampled)
-        minimum_q_values = torch.minimum(critic_1_q_values, critic_2_q_values)
+        # Calculate min_{i=1,2}  Q_{phi_targ, i}(s, a*)
+        critic_parameters = list(self.critic_1_network.parameters()) + list(self.critic_2_network.parameters())
+        for parameter in critic_parameters:
+            parameter.requires_grad_(False)
+
+        critic_1_q_values = self.critic_1_network(states, actions_mapped)
+        critic_2_q_values = self.critic_2_network(states, actions_mapped)
+        minimun_q_values = torch.minimum(critic_1_q_values, critic_2_q_values)
 
         # Calculate log(pi_theta(a*|s))
         logp_basic = pi_theta.log_prob(m_sample).sum(dim=-1, keepdim=True) - torch.log(1 - actions_sampled.pow(2) + 1e-6).sum(dim=-1, keepdim=True)
@@ -212,13 +223,8 @@ class SACAgent:
         policy_loss.backward()
         self.policy_optimizer.step()
 
-        # Alpha tuning
-        alpha_loss = None
-        if self.alpha_optimizer is not None:
-            alpha_loss = -(self.log_alpha.exp() * (logp_basic.detach() + self.target_entropy)).mean()
-            self.alpha_optimizer.zero_grad()
-            alpha_loss.backward()
-            self.alpha_optimizer.step()
+        for parameter in critic_parameters:
+            parameter.requires_grad_(True)
 
         # soft-update of target networks
         self.soft_update(self.target_1_network, self.critic_1_network)
