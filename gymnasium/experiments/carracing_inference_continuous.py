@@ -17,13 +17,13 @@ from networks.continuous_car_racing_cnn import ContinuousCarRacingPolicy
 VIDEO_DIRECTORY = 'gymnasium/videos/'
 os.makedirs(VIDEO_DIRECTORY, exist_ok=True)
 
-LOAD_EPISODE = -1
-CHECKPOINTS_DIRECTORY = 'gymnasium/checkpoints/carracing_sac/'
-EXPERIMENT_NAME = 'sac_cpu'
+LOAD_EPISODE = 6950
+CHECKPOINTS_DIRECTORY = 'gymnasium/checkpoints/'
+EXPERIMENT_NAME = 'carracing_sac'
 CHECKPOINT_PATH = CHECKPOINTS_DIRECTORY + EXPERIMENT_NAME + f'/episode_{LOAD_EPISODE}.pth'
 checkpoint = chkpts.load_checkpoint(CHECKPOINT_PATH)
 
-STATE_SLICES = (slice(6, -6), slice(None, -12), slice(None, None))
+STATE_SLICES = (slice(None), slice(None), slice(None))
 
 env = gym.make('CarRacing-v3', render_mode='human', lap_complete_percent=0.95, domain_randomize=True, continuous=True, max_episode_steps=-1)
 
@@ -33,13 +33,13 @@ elif torch.mps.is_available():
     device = 'mps'  # SCHMUTZ
 else:
     #device = 'cpu'
-    device = torch.device('cpu')
+    device = 'cpu'
 
-state_width = 84
-state_height = 84
+state_width = 96
+state_height = 96
 number_of_frames = 4
 input_shape = (state_width, state_height, number_of_frames)
-output_shape = 5
+output_shape = 3
 sac_policy = ContinuousCarRacingPolicy(input_shape=input_shape, action_dim=output_shape)
 optimizer = torch.optim.Adam(sac_policy.parameters())
 agent = SACAgent(
@@ -63,8 +63,9 @@ states_queue = deque(maxlen=number_of_frames, iterable=[empty_state] * 3)
 
 if checkpoint:
     agent.policy_network.load_state_dict(checkpoint['policy_network_state_dict'])
-# else:
-#     raise ValueError("Checkpoint must not be None")
+    print(f"Model restored at {CHECKPOINT_PATH}")
+else:
+    raise ValueError("Checkpoint must not be None")
 
 for episode_idx in range(20):
     state, _ = env.reset()
@@ -74,7 +75,7 @@ for episode_idx in range(20):
         grayscaled_state = prep.convert_to_grayscale(state=state, slices=STATE_SLICES)
         states_queue.append(grayscaled_state)
         agent_state = prep.deque_to_tensor(states_queue)
-        action = np.array([0, 1, 0])#agent.select_action(agent_state, inference_only=True)
+        action = agent.select_action(agent_state, inference_only=True)
 
         state, reward, terminated, truncated, info = env.step(action=action)
 

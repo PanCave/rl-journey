@@ -12,7 +12,5 @@ def sample_with_high_rewards_prioritized(replay_buffer: deque, number_of_samples
     return sorted_replays[:number_of_samples]
 
 def sample_continuous_with_high_rewards_prioritized(replay_buffer: deque, number_of_samples: int) -> List[ReplayContinuous]:
-    sampled_replays = random.sample(replay_buffer, min(len(replay_buffer), number_of_samples * 2))
-    # Only keep the samples with the highest reward
-    sorted_replays = sorted(sampled_replays, key=lambda replay: replay.reward, reverse=True)
-    return sorted_replays[:number_of_samples]
+    # SAC expects replay samples that match the state-action distribution.
+    return random.sample(replay_buffer, min(len(replay_buffer), number_of_samples))
