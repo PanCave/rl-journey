@@ -9,6 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from collections import deque
 import torch
 import numpy as np
+from clearml import Task
 
 from agents.continuous_agent import SACAgent
 from networks.continuous_car_racing_cnn import ContinuousCarRacingPolicy, ContinuousCarRacingCritic
@@ -22,6 +23,16 @@ BATCH_SIZE = 128
 REPLAY_BUFFER_RESET_STEPS = 1000
 TRAIN_EVERY_STEPS = 4
 RANDOM_WARMUP_STEPS = 10_000
+
+
+task = Task.init(
+    project_name="pytorch-tests",
+    task_name="rtx-3060ti-training"
+)
+
+print("CUDA available:", torch.cuda.is_available())
+
+print("GPU:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none")
 
 if torch.cuda.is_available():
     device = 'cuda'

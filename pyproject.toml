@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "clearml>=2.1.5",
     "gymnasium[box2d]>=1.2.2",
     "swig>=4.4.0",
     "tensorboard>=2.20.0",
